@@ -1,0 +1,39 @@
+components/
+│
+├── core/                     ← Central system controller (THE BRAIN)
+│   ├── include/
+│   │   ├── core_types.h      ← Global enums, structs, and shared types
+│   │   ├── event_types.h     ← Definition of all system events
+│   │   ├── command_types.h   ← Definition of all system commands
+│   │   └── system_state.h    ← System state machine definitions
+│   ├── priv_include/
+│   └── src/
+│       ├── state_manager.c   ← State machine and transitions
+│       ├── event_dispatcher.c← Event queue handling
+│       └── command_router.c  ← Command routing to services
+│
+├── services/                 ← Logical service providers
+│   ├── sensing/              ← Sensor data interpretation and event generation
+│   ├── actuation/            ← Actuator control logic
+│   ├── connectivity/         ← Wi-Fi, GSM, MQTT, inter-node communication
+│   ├── storage/              ← NVS and persistent storage services
+│   └── ui/                   ← LCD, LED, buzzer, and user interaction
+│
+├── drivers/                  ← Hardware abstraction layer
+│   ├── pir/
+│   ├── ultrasonic/
+│   ├── servo/
+│   ├── lcd/
+│   └── keypad/
+│
+├── config/                   ← System configuration
+│   ├── include/
+│   │   └── system_config.h   ← Runtime configuration structures
+│   └── Kconfig.projbuild     ← Compile-time configuration options
+│
+└── utils/                    ← Shared helper utilities
+    ├── include/
+    └── src/
+
+
+

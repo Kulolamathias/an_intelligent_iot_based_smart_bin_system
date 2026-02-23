@@ -1,0 +1,15 @@
+EVENT_SERVO_MOVEMENT_COMPLETED
+EVENT_LID_OPENED
+EVENT_LID_CLOSED
+That is mixing abstraction levels.
+
+Clean Architecture Model
+You want this:
+
+Service Layer emits:
+EVENT_SERVO_MOVEMENT_STARTED
+EVENT_SERVO_MOVEMENT_COMPLETED
+Core FSM derives:
+EVENT_LID_OPENED
+EVENT_LID_CLOSED
+

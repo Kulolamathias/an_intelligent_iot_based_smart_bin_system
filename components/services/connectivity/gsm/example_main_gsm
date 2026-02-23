@@ -1,0 +1,64 @@
+/**
+ * @file app_main.c
+ * @brief GSM Service validation harness.
+ *
+ * Demonstrates correct initialisation order and basic functionality.
+ */
+
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+
+#include "command_router.h"
+#include "event_dispatcher.h"
+#include "service_manager.h"
+#include "gsm_sim800_driver.h"
+#include "gsm_service.h"
+#include "command_params.h"
+
+static const char *TAG = "APP_MAIN";
+
+// Authorized numbers list (must be kept in scope)
+static const char *authorized_numbers[] = {
+    "+255688173415",
+};
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "Starting GSM validation harness");
+
+    ESP_ERROR_CHECK(command_router_init());
+    ESP_ERROR_CHECK(event_dispatcher_init());
+
+    ESP_ERROR_CHECK(gsm_service_init());
+
+    gsm_service_set_password("SECRET123");
+    gsm_service_set_authorized_numbers(authorized_numbers,
+                                       sizeof(authorized_numbers)/sizeof(authorized_numbers[0]));
+
+    ESP_ERROR_CHECK(gsm_service_register_handlers());
+    ESP_ERROR_CHECK(gsm_service_start());
+
+    // Allow time for module to stabilise (60 seconds)
+    ESP_LOGI(TAG, "Waiting for module to stabilise...");
+    vTaskDelay(pdMS_TO_TICKS(60000));
+
+    // Test ping
+    if (!gsm_driver_ping()) {
+        ESP_LOGE(TAG, "Module not responding after stabilisation");
+    } else {
+        ESP_LOGI(TAG, "Module ping OK");
+    }
+
+    ESP_LOGI(TAG, "Sending welcome SMS...");
+    cmd_send_sms_params_t welcome = {
+        .phone_number = "+255688173415",
+        .message = "System Online. Send SECRET123 HELP for commands."
+    };
+    command_router_execute(CMD_SEND_SMS, &welcome);
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
