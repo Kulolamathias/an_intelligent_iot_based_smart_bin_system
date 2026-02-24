@@ -97,6 +97,76 @@ typedef struct {
     float angle_deg;          /* used by CMD_SERVO_SET_ANGLE, CMD_SERVO_OPEN/CLOSE also may use it */
 } servo_command_data_t;
 
+typedef struct {
+    char ssid[32];
+    char password[64];
+    uint8_t auth_mode;  // from esp_wifi_types.h
+} cmd_connect_wifi_params_t;
+
+typedef struct {
+    uint32_t min_retry_delay_ms;
+    uint32_t max_retry_delay_ms;
+    uint32_t max_retry_attempts;
+} cmd_set_config_wifi_params_t;
+
+/* ------------------------------------------------------------
+ * MQTT command parameters
+ * ------------------------------------------------------------ */
+typedef struct {
+    char broker_uri[128];
+    char client_id[64];
+    char username[32];
+    char password[32];
+    int keepalive;
+    bool disable_clean_session;
+    int lwt_qos;
+    bool lwt_retain;
+    char lwt_topic[64];
+    char lwt_message[64];
+    uint32_t min_retry_delay_ms;
+    uint32_t max_retry_delay_ms;
+    uint32_t max_retry_attempts;
+} cmd_connect_mqtt_params_t;
+
+typedef struct {
+    char broker_uri[128];
+    char client_id[64];
+    char username[32];
+    char password[32];
+    int keepalive;
+    bool disable_clean_session;
+    int lwt_qos;
+    bool lwt_retain;
+    char lwt_topic[64];
+    char lwt_message[64];
+    uint32_t min_retry_delay_ms;
+    uint32_t max_retry_delay_ms;
+    uint32_t max_retry_attempts;
+} cmd_set_config_mqtt_params_t;
+
+typedef struct {
+    char topic[128];
+    char payload[256];
+    size_t payload_len;
+    int qos;
+    bool retain;
+} cmd_publish_mqtt_params_t;
+
+typedef struct {
+    char topic[128];
+    int qos;
+} cmd_subscribe_mqtt_params_t;
+
+typedef struct {
+    char topic[128];
+} cmd_unsubscribe_mqtt_params_t;
+
+/* For CMD_MQTT_SET_WIFI_STATE, we can use the generic status_value field.
+ * No new struct needed, but we need a way to pass a boolean. The command
+ * router passes a void*; we can cast a uint32_t. For clarity, define:
+ */
+typedef uint32_t cmd_wifi_state_t;  /* 0 = disconnected, 1 = connected */
+
 /* ============================================================
  * UNION OF ALL PARAMETER STRUCTURES
  *
@@ -111,6 +181,13 @@ typedef union {
     cmd_send_status_update_params_t   send_status_update;
     cmd_start_timer_params_t          start_timer;   /* for all timer start commands */
     servo_command_data_t              servo;
+    cmd_connect_wifi_params_t         connect_wifi;
+    cmd_set_config_wifi_params_t      set_config_wifi;
+    cmd_connect_mqtt_params_t         connect_mqtt;
+    cmd_set_config_mqtt_params_t      set_config_mqtt;
+    cmd_publish_mqtt_params_t         publish_mqtt;
+    cmd_subscribe_mqtt_params_t       subscribe_mqtt;
+    cmd_unsubscribe_mqtt_params_t     unsubscribe_mqtt;
 } command_param_union_t;
 
 #ifdef __cplusplus

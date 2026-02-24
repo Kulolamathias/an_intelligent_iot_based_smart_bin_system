@@ -37,6 +37,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "esp_netif.h"       // for esp_netif_ip_info_t
 #include "core_types.h"
 
 #ifdef __cplusplus
@@ -72,9 +73,17 @@ typedef enum {
     /* --------------------------------------------------------
      * Connectivity events (network state changes)
      * -------------------------------------------------------- */
-    EVENT_WIFI_CONNECTED,             /**< WiFi link established */
-    EVENT_WIFI_DISCONNECTED,          /**< WiFi link lost */
-    EVENT_NETWORK_MESSAGE_RECEIVED,   /**< Incoming MQTT/network message */
+    EVENT_WIFI_CONNECTING,           /**< WiFi connection attempt initiated */
+    EVENT_WIFI_CONNECTED,            /**< WiFi link established */
+    EVENT_WIFI_GOT_IP,               /**< WiFi station obtained IP address */
+    EVENT_WIFI_STATUS,               /**< WiFi status update (payload: wifi_service_state_t) */
+    EVENT_WIFI_DISCONNECTED,         /**< WiFi link lost */
+    EVENT_WIFI_CONNECTION_FAILED,    /**< WiFi connection attempt failed */
+    EVENT_NETWORK_MESSAGE_RECEIVED,  /**< Incoming MQTT/network message */
+    EVENT_MQTT_CONNECTING,           /**< MQTT connection attempt initiated */
+    EVENT_MQTT_CONNECTED,            /**< MQTT connection established */
+    EVENT_MQTT_DISCONNECTED,         /**< MQTT connection lost */
+    EVENT_MQTT_CONNECTION_FAILED,    /**< MQTT connection attempt failed */
     EVENT_GSM_CONNECTED,             /**< GSM network registered */
     EVENT_GSM_DISCONNECTED,          /**< GSM network lost */
     EVENT_GSM_SMS_RECEIVED,          /**< SMS received (payload: sender, message) */
@@ -105,7 +114,7 @@ typedef enum {
      * Actuation feedback (mechanical completion)
      * -------------------------------------------------------- */
     EVENT_LID_OPENED,               /**< Lid reached open position */
-    EVENT_LID_CLOSED,              /**< Lid reached closed position */
+    EVENT_LID_CLOSED,               /**< Lid reached closed position */
 
     /* Servo events – hardware level only */
     EVENT_SERVO_MOVEMENT_STARTED,
@@ -136,12 +145,40 @@ typedef enum {
 
 } system_event_id_t;
 
+
 /* ============================================================
  * EVENT PAYLOAD UNION
  *
  * Each event type may carry associated observation data.
  * Payload is zero-initialized before posting; unused fields are ignored.
  * ============================================================ */
+
+ // Payload structures for WiFi events
+typedef struct {
+    int reason;               /**< WiFi disconnection reason code */
+} wifi_event_disconnected_t;
+
+typedef struct {
+    uint32_t attempts;        /**< Number of attempts made before failure */
+} wifi_event_connection_failed_t;
+
+typedef struct {
+    int reason;
+} mqtt_event_disconnected_t;
+
+typedef struct {
+    uint32_t attempts;
+} mqtt_event_connection_failed_t;
+
+typedef struct {
+    char topic[128];
+    uint8_t payload[256];
+    size_t payload_len;
+    int qos;
+    bool retain;
+} mqtt_message_t;
+
+
 typedef struct {
     system_event_id_t id;           /**< Event type – MUST be first field */
     union {
@@ -182,6 +219,15 @@ typedef struct {
         struct {
             uint16_t distance_cm;   /**< Measured distance in centimeters */
         } intent_sensor;
+
+        wifi_event_disconnected_t wifi_disconnected;
+        wifi_event_connection_failed_t wifi_connection_failed;
+        esp_netif_ip_info_t ip_info;         /**< for wifi got ip */
+        uint32_t status_value;               /**< for wifi status */
+
+        mqtt_event_disconnected_t mqtt_disconnected;
+        mqtt_event_connection_failed_t mqtt_connection_failed;
+        mqtt_message_t mqtt_message;
 
         /* Reserved for future expansion – always zero */
         struct {

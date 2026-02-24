@@ -538,6 +538,13 @@ esp_err_t state_manager_process_event(const system_event_t *event)
             break;
     }
 
+    /**< For debugging: log relevant event data when msg is recieved */
+    if (event->id == EVENT_NETWORK_MESSAGE_RECEIVED) {
+        ESP_LOGI(TAG, "Network message: \n\ttopic=%.*s, \n\tpayload=%.*s",
+                 (int)strlen(event->data.mqtt_message.topic), event->data.mqtt_message.topic,
+                 (int)event->data.mqtt_message.payload_len, event->data.mqtt_message.payload);
+    }
+
     /* --------------------------------------------------------
      * 2. EVALUATE TRANSITION TABLE – first match wins
      * -------------------------------------------------------- */

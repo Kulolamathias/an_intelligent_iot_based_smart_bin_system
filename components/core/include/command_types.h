@@ -93,11 +93,23 @@ typedef enum {
     CMD_SEND_STATUS_UPDATE,     /**< Transmit full status report */
     CMD_CONNECT_WIFI,           /**< Initiate WiFi connection */
     CMD_DISCONNECT_WIFI,        /**< Terminate WiFi link */
-    CMD_CONNECT_GSM,           /**< Initiate GSM connection */
-    CMD_DISCONNECT_GSM,        /**< Terminate GSM link */
-    CMD_SEND_SMS,                /**< Send an SMS (params: cmd_send_sms_params_t) */
-    CMD_SET_GSM_PASSWORD,        /**< Set GSM password (params: string) – optional */
-    CMD_SET_AUTHORIZED_NUMBERS,  /**< Set authorized numbers (params: array) – optional */
+    CMD_SET_CONFIG_WIFI,        /**< Update WiFi parameters (params: cmd_set_config_wifi_params_t) */
+    CMD_SCAN_WIFI,              /**< Perform WiFi scan, report results */
+    CMD_GET_STATUS_WIFI,        /**< Query current WiFi status */
+
+    CMD_CONNECT_MQTT,           /**< Initiate MQTT connection */
+    CMD_DISCONNECT_MQTT,        /**< Terminate MQTT connection */
+    CMD_SET_CONFIG_MQTT,        /**< Update MQTT parameters (params: cmd_set_config_mqtt_params_t) */
+    CMD_PUBLISH_MQTT,           /**< Publish MQTT message (params: cmd_publish_mqtt_params_t) */
+    CMD_SUBSCRIBE_MQTT,         /**< Subscribe to MQTT topic (params: cmd_subscribe_mqtt_params_t) */
+    CMD_UNSUBSCRIBE_MQTT,       /**< Unsubscribe from MQTT topic (params: cmd_unsubscribe_mqtt_params_t) */
+    CMD_MQTT_SET_WIFI_STATE,      /**< Inform MQTT service of WiFi connectivity (payload: bool connected) */
+
+    CMD_CONNECT_GSM,            /**< Initiate GSM connection */
+    CMD_DISCONNECT_GSM,         /**< Terminate GSM link */
+    CMD_SEND_SMS,               /**< Send an SMS (params: cmd_send_sms_params_t) */
+    CMD_SET_GSM_PASSWORD,       /**< Set GSM password (params: string) – optional */
+    CMD_SET_AUTHORIZED_NUMBERS, /**< Set authorized numbers (params: array) – optional */
 
     /* --------------------------------------------------------
      * Sensor commands – measurement triggers

@@ -18,6 +18,8 @@
 #include "gsm_service.h"
 #include "ultrasonic_service.h"
 #include "servo_service.h"
+#include "wifi_service.h"
+#include "mqtt_service.h"
 
 
 static const char *TAG = "SERVICE_MGR";
@@ -57,6 +59,18 @@ static const service_entry_t s_services[] = {
     //     .register_handlers = gsm_service_register_handlers,
     //     .start = gsm_service_start
     // },
+    {
+        .name = "wifi",
+        .init = wifi_service_init,
+        .register_handlers = wifi_service_register_handlers,
+        .start = wifi_service_start
+    },
+    {
+        .name = "mqtt",
+        .init = mqtt_service_init,
+        .register_handlers = mqtt_service_register_handlers,
+        .start = mqtt_service_start
+    },
     {
         .name = "ultrasonic",
         .init = ultrasonic_service_init,

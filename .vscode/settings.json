@@ -15,7 +15,7 @@
     "--query-driver=C:\\Espressif\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32-elf-gcc.exe",
     "--compile-commands-dir=${workspaceFolder}\\build"
   ],
-  "idf.portWin": "COM11",
+  "idf.portWin": "COM13",
   "idf.flashType": "UART",
   "idf.currentSetup": "C:/Espressif/frameworks/esp-idf-v5.4.2/"
 }

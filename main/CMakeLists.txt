@@ -9,4 +9,5 @@ idf_component_register(
         config
         utils
         tests
+        esp_event
 )
