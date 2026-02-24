@@ -80,6 +80,7 @@ typedef enum {
  */
 typedef struct {
     const char* topic;                 /**< Topic string (null-terminated, valid only during callback) */
+    size_t topic_len;                  /**< Length of topic in bytes */
     const void* payload;               /**< Payload data (valid only during callback) */
     size_t payload_len;                /**< Length of payload in bytes */
     int qos;                           /**< QoS of the message */

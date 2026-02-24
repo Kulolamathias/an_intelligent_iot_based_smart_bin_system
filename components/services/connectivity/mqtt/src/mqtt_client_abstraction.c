@@ -278,6 +278,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         case MQTT_EVENT_DATA: {
             mqtt_client_data_t data = {
                 .topic = event->topic,
+                .topic_len = event->topic_len,
                 .payload = event->data,
                 .payload_len = event->data_len,
                 .qos = event->qos,

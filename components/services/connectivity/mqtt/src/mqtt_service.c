@@ -622,8 +622,13 @@ static void client_event_callback(mqtt_client_event_t event, void *data)
             if (data) {
                 mqtt_client_data_t *src = (mqtt_client_data_t*)data;
                 mqtt_message_t *msg = &item.msg.client_evt.data.message;
-                strlcpy(msg->topic, src->topic, sizeof(msg->topic));
-                size_t copy_len = src->payload_len;
+                /* Copy topic using explicit length */
+                size_t copy_len = src->topic_len;
+                if (copy_len > sizeof(msg->topic) - 1) copy_len = sizeof(msg->topic) - 1;
+                memcpy(msg->topic, src->topic, copy_len);
+                msg->topic[copy_len] = '\0';   /* ensure null termination */
+                /* Copy payload */
+                copy_len = src->payload_len;
                 if (copy_len > sizeof(msg->payload)) copy_len = sizeof(msg->payload);
                 memcpy(msg->payload, src->payload, copy_len);
                 msg->payload_len = copy_len;
