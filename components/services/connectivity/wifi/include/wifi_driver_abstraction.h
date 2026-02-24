@@ -1,3 +1,36 @@
+/**
+ * @file wifi_driver_abstraction.h
+ * @brief WiFi Driver Abstraction – Low‑level Wrapper for ESP‑IDF WiFi
+ *
+ * =============================================================================
+ * ARCHITECTURAL ROLE
+ * =============================================================================
+ * This layer encapsulates all ESP‑IDF WiFi APIs (esp_wifi.h, esp_netif.h).
+ * It provides a simplified, deterministic interface for the higher‑level
+ * WiFi service. No business logic, reconnect logic, or state machines are
+ * present.
+ *
+ * =============================================================================
+ * OWNERSHIP
+ * =============================================================================
+ * - Defines: event types, callback type, and public API.
+ * - Does NOT: maintain any persistent state outside its own static context.
+ *
+ * =============================================================================
+ * INVARIANTS
+ * =============================================================================
+ * - All public functions validate their arguments.
+ * - The internal context is static and not exposed to callers.
+ * - The caller must call esp_netif_init() and esp_event_loop_create_default()
+ *   before using this driver.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #ifndef WIFI_DRIVER_ABSTRACTION_H
 #define WIFI_DRIVER_ABSTRACTION_H
 
@@ -19,63 +52,64 @@ typedef enum {
 
 /**
  * @brief Callback type for WiFi driver events.
+ *
  * @param event Event type
- * @param data Event-specific data (see event description). Valid only during callback.
+ * @param data Event‑specific data (see event description). Valid only during callback.
  */
 typedef void (*wifi_driver_event_cb_t)(wifi_driver_event_t event, void* data);
 
 /**
  * @brief Initialize the WiFi driver.
- * 
+ *
  * This function initializes the WiFi stack in station mode, creates the default
  * station netif, and registers event handlers. It must be called before any other
  * driver functions (except registration). The caller is responsible for calling
  * esp_netif_init() and esp_event_loop_create_default() prior to this function.
- * 
+ *
  * @return ESP_OK on success, or an error code from underlying ESP-IDF calls.
  */
 esp_err_t wifi_driver_init(void);
 
 /**
  * @brief Start the WiFi driver.
- * 
+ *
  * Starts the WiFi station. After this call, the driver can connect to an AP.
- * 
+ *
  * @return ESP_OK on success, or an error code.
  */
 esp_err_t wifi_driver_start(void);
 
 /**
  * @brief Connect to an access point.
- * 
+ *
  * Sets the station configuration with the provided SSID and password and initiates
  * connection. The driver must be started before calling this.
- * 
- * @param ssid      SSID of the AP (null-terminated string).
- * @param password  Password for the AP (null-terminated string). May be empty for open networks.
+ *
+ * @param ssid      SSID of the AP (null‑terminated string).
+ * @param password  Password for the AP (null‑terminated string). May be empty for open networks.
  * @return ESP_OK on success, or an error code.
  */
 esp_err_t wifi_driver_connect(const char* ssid, const char* password);
 
 /**
  * @brief Disconnect from the current access point.
- * 
+ *
  * @return ESP_OK on success, or an error code.
  */
 esp_err_t wifi_driver_disconnect(void);
 
 /**
  * @brief Stop the WiFi driver.
- * 
+ *
  * Stops the WiFi station. After this call, the driver cannot connect until started again.
- * 
+ *
  * @return ESP_OK on success, or an error code.
  */
 esp_err_t wifi_driver_stop(void);
 
 /**
  * @brief Get the current IP information of the station interface.
- * 
+ *
  * @param[out] ip_info Pointer to structure to be filled with IP info.
  * @return ESP_OK on success, or ESP_ERR_INVALID_STATE if no IP, or error code.
  */
@@ -83,11 +117,11 @@ esp_err_t wifi_driver_get_ip(esp_netif_ip_info_t* ip_info);
 
 /**
  * @brief Register a callback for WiFi driver events.
- * 
+ *
  * Only one callback can be registered at a time. Calling this function again
- * replaces the previous callback. The callback is invoked from the ESP-IDF event
+ * replaces the previous callback. The callback is invoked from the ESP‑IDF event
  * task context and must not block.
- * 
+ *
  * @param cb Callback function, or NULL to unregister.
  * @return ESP_OK always.
  */

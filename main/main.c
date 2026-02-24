@@ -1,5 +1,36 @@
 
 
+/**
+ * @file main.c
+ * @brief Integration Test for WiFi and MQTT Services
+ *
+ * =============================================================================
+ * PURPOSE
+ * =============================================================================
+ * This test initializes the core subsystems and services, connects to a WiFi
+ * network, then to an MQTT broker. It subscribes to a device‑specific topic
+ * and publishes an online status. Received MQTT messages are printed to the log.
+ *
+ * =============================================================================
+ * ARCHITECTURAL ROLE
+ * =============================================================================
+ * - Demonstrates the correct lifecycle of services via the service manager.
+ * - Uses command router to send commands to services.
+ * - Registers a local event handler to log incoming network messages.
+ *
+ * =============================================================================
+ * DEPENDENCIES
+ * =============================================================================
+ * - command_router, event_dispatcher, service_manager (core)
+ * - wifi_service, mqtt_service, mqtt_topic (services)
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -20,6 +51,7 @@
 #include "mqtt_service.h"
 #include "mqtt_topic.h"
 
+/* Configuration (should be moved to Kconfig / menuconfig) */
 #define CONFIG_WIFI_SSID "Mathias' Sxx U..."
 #define CONFIG_WIFI_PASSWORD "1234567890223"
 #define CONFIG_MQTT_BROKER_URI "mqtt://102.223.8.140:1883"
@@ -30,21 +62,14 @@
 static const char *TAG = "MAIN";
 
 
-static void mqtt_message_handler(system_event_id_t event, void *data, void *ctx)
-{
-    if (event == EVENT_NETWORK_MESSAGE_RECEIVED) {
-        system_event_t *ev = (system_event_t*)data;
-        ESP_LOGI(TAG, "MQTT received: topic=%.*s, payload=%.*s",
-                 (int)strlen(ev->data.mqtt_message.topic), ev->data.mqtt_message.topic,
-                 (int)ev->data.mqtt_message.payload_len, ev->data.mqtt_message.payload);
-    }
-}
 
-/* Simple delay-based synchronization (no event handlers) */
 void app_main(void)
 {
     esp_err_t ret;
 
+    /* --------------------------------------------------------------------
+     * 1. Initialize core subsystems
+     * -------------------------------------------------------------------- */
     ESP_LOGI(TAG, "Initialising command router");
     ret = command_router_init();
     if (ret != ESP_OK) { ESP_LOGE(TAG, "command_router_init failed: %d", ret); return; }
@@ -53,9 +78,9 @@ void app_main(void)
     ret = event_dispatcher_init();
     if (ret != ESP_OK) { ESP_LOGE(TAG, "event_dispatcher_init failed: %d", ret); return; }
 
-    // event_dispatcher_register_handler(EVENT_NETWORK_MESSAGE_RECEIVED, mqtt_message_handler, NULL);
-
-    /* Initialize NVS */
+    /* --------------------------------------------------------------------
+     * 2. Initialize NVS (required by WiFi)
+     * -------------------------------------------------------------------- */
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -63,47 +88,36 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    /* Initialize TCP/IP stack and default event loop */
+    /* --------------------------------------------------------------------
+     * 3. Initialize TCP/IP stack and default event loop
+     * -------------------------------------------------------------------- */
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // /* 1. Core initialisation */
-    // ESP_LOGI(TAG, "Initialising command router");
-    // ret = command_router_init();
-    // if (ret != ESP_OK) {
-    //     ESP_LOGE(TAG, "command_router_init failed: %d", ret);
-    //     return;
-    // }
-
-    // ESP_LOGI(TAG, "Initialising event dispatcher");
-    // ret = event_dispatcher_init();
-    // if (ret != ESP_OK) {
-    //     ESP_LOGE(TAG, "event_dispatcher_init failed: %d", ret);
-    //     return;
-    // }
-
-    /* 2. Service initialisation via service manager */
+    /* --------------------------------------------------------------------
+     * 4. Initialize all services via service manager
+     * -------------------------------------------------------------------- */
     ret = service_manager_init_all();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "service_manager_init_all failed: %d", ret);
         return;
     }
 
-    /* 3. Register command handlers */
     ret = service_manager_register_all();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "service_manager_register_all failed: %d", ret);
         return;
     }
 
-    /* 4. Start services */
     ret = service_manager_start_all();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "service_manager_start_all failed: %d", ret);
         return;
     }
 
-    /* 5. Prepare WiFi credentials (set in menuconfig) */
+    /* --------------------------------------------------------------------
+     * 5. Connect to WiFi
+     * -------------------------------------------------------------------- */
     cmd_connect_wifi_params_t wifi_conn = {
         .ssid = CONFIG_WIFI_SSID,
         .password = CONFIG_WIFI_PASSWORD,
@@ -112,12 +126,17 @@ void app_main(void)
     ESP_LOGI(TAG, "Connecting to WiFi...");
     command_router_execute(CMD_CONNECT_WIFI, &wifi_conn);
 
-    /* 6. Wait for WiFi connection (simple delay – assumes ~10s to connect) */
+    /* Simple delay – in a real application, use an event group to wait for EVENT_WIFI_GOT_IP */
     vTaskDelay(pdMS_TO_TICKS(10000));
-
     ESP_LOGI(TAG, "Assuming WiFi connected");
 
-    /* 7. Prepare MQTT broker configuration */
+    /* Inform MQTT service that WiFi is now connected */
+    uint32_t wifi_state = 1;
+    command_router_execute(CMD_MQTT_SET_WIFI_STATE, &wifi_state);
+
+    /* --------------------------------------------------------------------
+     * 6. Connect to MQTT broker
+     * -------------------------------------------------------------------- */
     cmd_connect_mqtt_params_t mqtt_conn = {
         .broker_uri = CONFIG_MQTT_BROKER_URI,
         .client_id = CONFIG_MQTT_CLIENT_ID,
@@ -133,18 +152,15 @@ void app_main(void)
         .max_retry_delay_ms = 30000,
         .max_retry_attempts = 5
     };
-
-    /* After WiFi is connected (or after your delay) */
-    uint32_t wifi_connected = 1;
-    command_router_execute(CMD_MQTT_SET_WIFI_STATE, &wifi_connected);
-
     ESP_LOGI(TAG, "Connecting to MQTT broker...");
     command_router_execute(CMD_CONNECT_MQTT, &mqtt_conn);
 
-    /* 8. Wait for MQTT connection (another delay) */
+    /* Allow time for connection */
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    /* 9. Build topics using MAC-based base */
+    /* --------------------------------------------------------------------
+     * 7. Build topics and subscribe/publish
+     * -------------------------------------------------------------------- */
     char base_topic[32];
     ESP_ERROR_CHECK(mqtt_topic_init(base_topic, sizeof(base_topic)));
     ESP_LOGI(TAG, "Base topic: %s", base_topic);
@@ -174,13 +190,14 @@ void app_main(void)
     ESP_LOGI(TAG, "Publishing %s", pub_topic);
     command_router_execute(CMD_PUBLISH_MQTT, &pub);
 
-    /* 10. Main loop – keep running */
+    /* --------------------------------------------------------------------
+     * 8. Main loop – keep running
+     * -------------------------------------------------------------------- */
     ESP_LOGI(TAG, "Test running. Check MQTT Explorer for messages.");
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
 
 
 

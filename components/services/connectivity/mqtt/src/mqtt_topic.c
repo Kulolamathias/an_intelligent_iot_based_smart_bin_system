@@ -1,10 +1,29 @@
+/**
+ * @file mqtt_topic.c
+ * @brief Implementation of MQTT topic builder.
+ *
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - The MAC address is read once during mqtt_topic_init() using esp_efuse_mac_get_default().
+ * - The base topic is stored in a static buffer; subsequent calls to
+ *   mqtt_topic_build() use this base.
+ * - Buffer overflows are prevented by explicit size checks.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include "mqtt_topic.h"
 #include "esp_efuse.h"
 #include "esp_mac.h"
 #include <string.h>
 #include <stdio.h>
 
-/* Static storage for base topic (module-level, not global to application) */
+/* Static storage for the base topic (internal to this module) */
 static char s_base_topic[32] = {0};  /* Enough for "devices/xxxxxxxxxxxx/" plus null */
 
 /* Maximum MAC address string length (12 hex chars) */
@@ -36,10 +55,8 @@ esp_err_t mqtt_topic_init(char* base_topic_buffer, size_t size)
         return ESP_FAIL;  /* Should never happen */
     }
 
-    /* Copy to user buffer if provided */
-    if (base_topic_buffer) {
-        strlcpy(base_topic_buffer, s_base_topic, size);
-    }
+    /* Copy to user buffer */
+    strlcpy(base_topic_buffer, s_base_topic, size);
 
     return ESP_OK;
 }

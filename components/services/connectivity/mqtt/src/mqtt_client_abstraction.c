@@ -1,3 +1,23 @@
+/**
+ * @file mqtt_client_abstraction.c
+ * @brief Implementation of the MQTT client abstraction.
+ *
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - Uses ESP‑IDF's esp_mqtt_client component.
+ * - Internal context is static; all functions operate on that single instance.
+ * - Configuration strings are copied using malloc() to allow the caller
+ *   to free them immediately after init.
+ * - The user callback is invoked from the MQTT event task; it must not block.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include "mqtt_client_abstraction.h"
 #include "mqtt_client.h"
 #include "esp_log.h"
@@ -6,21 +26,21 @@
 
 static const char* TAG = "mqtt_client_abs";
 
-/* Internal context (static, private) */
+/* Private context (static, not exposed) */
 typedef struct {
-    esp_mqtt_client_handle_t client;
-    mqtt_client_event_cb_t user_cb;
-    mqtt_client_config_t config;
-    bool initialized;
-    bool started;
+    esp_mqtt_client_handle_t client;      /**< Handle to the underlying ESP-MQTT client */
+    mqtt_client_event_cb_t user_cb;       /**< User-registered callback function */
+    mqtt_client_config_t config;           /**< Copy of the configuration strings */
+    bool initialized;                       /**< true after mqtt_client_init() succeeds */
+    bool started;                           /**< true after mqtt_client_start() succeeds */
 } mqtt_client_context_t;
 
 static mqtt_client_context_t s_ctx = {0};
 
-/* Forward declarations */
+/* Forward declarations of internal functions */
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
-/* Helper to copy string into newly allocated memory (duplicate) */
+/* Helper: duplicate a string using malloc() */
 static char* copy_string(const char* src) {
     if (!src) return NULL;
     size_t len = strlen(src) + 1;
@@ -31,7 +51,7 @@ static char* copy_string(const char* src) {
     return dst;
 }
 
-/* Free configuration strings */
+/* Helper: free all configuration strings and clear the structure */
 static void free_config_strings(mqtt_client_config_t* cfg) {
     if (cfg->broker_uri)   { free((void*)cfg->broker_uri);   cfg->broker_uri = NULL; }
     if (cfg->client_id)    { free((void*)cfg->client_id);    cfg->client_id = NULL; }
@@ -51,7 +71,7 @@ esp_err_t mqtt_client_init(const mqtt_client_config_t* config)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Use defaults if config is NULL */
+    /* Default configuration used if config is NULL */
     mqtt_client_config_t default_config = {
         .broker_uri = "mqtt://test.mosquitto.org:1883",
         .client_id = NULL,
@@ -69,7 +89,7 @@ esp_err_t mqtt_client_init(const mqtt_client_config_t* config)
 
     const mqtt_client_config_t* src = config ? config : &default_config;
 
-    /* Copy configuration strings */
+    /* Copy configuration strings (deep copy) */
     s_ctx.config.broker_uri   = copy_string(src->broker_uri);
     s_ctx.config.client_id    = copy_string(src->client_id);
     s_ctx.config.username     = copy_string(src->username);
@@ -103,7 +123,7 @@ esp_err_t mqtt_client_start(void)
         return ESP_OK;  /* Idempotent */
     }
 
-    /* Build esp-mqtt configuration */
+    /* Build the ESP‑MQTT configuration structure */
     esp_mqtt_client_config_t esp_cfg = {
         .broker.address.uri = s_ctx.config.broker_uri,
         .credentials.client_id = s_ctx.config.client_id,
@@ -125,7 +145,7 @@ esp_err_t mqtt_client_start(void)
         return ESP_FAIL;
     }
 
-    /* Register event handler */
+    /* Register the internal event handler */
     esp_err_t err = esp_mqtt_client_register_event(s_ctx.client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     if (err != ESP_OK) {
         esp_mqtt_client_destroy(s_ctx.client);
@@ -133,7 +153,7 @@ esp_err_t mqtt_client_start(void)
         return err;
     }
 
-    /* Start client (connects asynchronously) */
+    /* Start the client (asynchronous connection) */
     err = esp_mqtt_client_start(s_ctx.client);
     if (err != ESP_OK) {
         esp_mqtt_client_destroy(s_ctx.client);
@@ -152,6 +172,7 @@ esp_err_t mqtt_client_stop(void)
         return ESP_ERR_INVALID_STATE;
     }
 
+    /* If the client was started, stop and destroy it */
     if (s_ctx.started) {
         esp_err_t err = esp_mqtt_client_stop(s_ctx.client);
         if (err != ESP_OK) {
@@ -165,7 +186,7 @@ esp_err_t mqtt_client_stop(void)
         s_ctx.started = false;
     }
 
-    /* Always free configuration strings and reset initialized */
+    /* Always free configuration strings and reset initialization flag */
     free_config_strings(&s_ctx.config);
     s_ctx.initialized = false;
     ESP_LOGI(TAG, "MQTT client stopped");
@@ -231,7 +252,7 @@ esp_err_t mqtt_client_register_callback(mqtt_client_event_cb_t cb)
 }
 
 /*============================================================================
- * Internal event handler (translates esp-mqtt events to our abstraction)
+ * Internal event handler: translates esp-mqtt events to our abstraction
  *============================================================================*/
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)

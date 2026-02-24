@@ -1,3 +1,24 @@
+/**
+ * @file wifi_service.c
+ * @brief Implementation of the WiFi Service.
+ *
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - The service runs a single FreeRTOS task that processes a queue of
+ *   commands (from the command router), driver events (from the abstraction),
+ *   and retry timer expirations.
+ * - A finite state machine controls connection attempts and reconnections.
+ * - Reconnection uses exponential backoff with configurable limits.
+ * - All events emitted to the core are POD structures copied from temporary data.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include "wifi_service.h"
 #include "wifi_private.h"
 #include "wifi_driver_abstraction.h"
@@ -8,7 +29,7 @@
 
 static const char* TAG = "wifi_service";
 
-/* Default configuration */
+/* Default configuration values (used if no command overrides) */
 #define WIFI_DEFAULT_MIN_RETRY_MS   1000
 #define WIFI_DEFAULT_MAX_RETRY_MS   60000
 #define WIFI_DEFAULT_MAX_ATTEMPTS    5
@@ -28,7 +49,7 @@ static void stop_reconnect_timer(void);
 static void reconnect_timer_callback(void *arg);
 static void driver_event_callback(wifi_driver_event_t event, void *data);
 
-/* Command handlers (called by command router) */
+/* Command handlers (registered with command router) */
 static esp_err_t cmd_connect_wifi_handler(void *context, void *params);
 static esp_err_t cmd_disconnect_wifi_handler(void *context, void *params);
 static esp_err_t cmd_set_config_wifi_handler(void *context, void *params);
@@ -46,7 +67,7 @@ esp_err_t wifi_service_init(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Create queue */
+    /* Create command/event queue */
     s_ctx.queue = xQueueCreate(10, sizeof(queue_item_t));
     if (!s_ctx.queue) {
         return ESP_ERR_NO_MEM;
@@ -259,6 +280,7 @@ static void process_command(const command_msg_t *cmd)
 
             /* Only allowed from IDLE or FAILED */
             if (s_ctx.state != WIFI_STATE_IDLE && s_ctx.state != WIFI_STATE_FAILED) {
+                ESP_LOGD(TAG, "Connect ignored, current state %d", s_ctx.state);
                 return;
             }
 
@@ -317,6 +339,7 @@ static void process_command(const command_msg_t *cmd)
         }
 
         default:
+            ESP_LOGW(TAG, "Unknown command %d", cmd->cmd_id);
             break;
     }
 }
@@ -497,7 +520,7 @@ static void emit_event(system_event_id_t event, void *data)
             }
             break;
         default:
-            /* No payload */
+            /* No payload for other WiFi events */
             break;
     }
 

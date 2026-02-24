@@ -1,3 +1,25 @@
+/**
+ * @file mqtt_service.c
+ * @brief Implementation of the MQTT Service.
+ *
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - The service runs a single FreeRTOS task that processes a queue of
+ *   commands (from the command router), client events (from the abstraction),
+ *   and retry timer expirations.
+ * - A finite state machine controls connection attempts, reconnections,
+ *   and interaction with the WiFi status.
+ * - Reconnection uses exponential backoff with configurable limits.
+ * - All events emitted to the core are POD structures copied from temporary data.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include "mqtt_service.h"
 #include "mqtt_private.h"
 #include "mqtt_client_abstraction.h"
@@ -9,20 +31,19 @@
 
 static const char* TAG = "mqtt_service";
 
-/* Default configuration */
+/* Default configuration values (used if no command overrides) */
 #define MQTT_DEFAULT_MIN_RETRY_MS   2000
 #define MQTT_DEFAULT_MAX_RETRY_MS   60000
 #define MQTT_DEFAULT_MAX_ATTEMPTS    5
 #define MQTT_DEFAULT_KEEPALIVE       120
 
-/* Static service context */
+/* Static service context (single instance) */
 static struct mqtt_service_context s_ctx = {0};
 
-/* Forward declarations */
+/* Forward declarations of internal functions */
 static void mqtt_service_task(void *pvParameters);
 static void process_command(const command_msg_t *cmd);
 static void process_client_event(const client_event_msg_t *evt);
-// static void process_wifi_event(const wifi_event_msg_t *evt);
 static void process_retry(void);
 static void set_state(mqtt_service_state_t new_state);
 static void emit_event(system_event_id_t event, void *data);
@@ -30,9 +51,8 @@ static void start_reconnect_timer(void);
 static void stop_reconnect_timer(void);
 static void reconnect_timer_callback(void *arg);
 static void client_event_callback(mqtt_client_event_t event, void *data);
-// static void wifi_event_handler(system_event_id_t event, void *data, void *ctx);
 
-/* Command handlers */
+/* Command handlers (registered with command router) */
 static esp_err_t cmd_connect_mqtt_handler(void *context, void *params);
 static esp_err_t cmd_disconnect_mqtt_handler(void *context, void *params);
 static esp_err_t cmd_set_config_mqtt_handler(void *context, void *params);
@@ -51,7 +71,7 @@ esp_err_t mqtt_service_init(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Create queue */
+    /* Create command/event queue */
     s_ctx.queue = xQueueCreate(10, sizeof(queue_item_t));
     if (!s_ctx.queue) {
         return ESP_ERR_NO_MEM;
@@ -70,14 +90,14 @@ esp_err_t mqtt_service_init(void)
         return err;
     }
 
-    /* Set default config */
+    /* Set default configuration */
     s_ctx.config.min_retry_delay_ms = MQTT_DEFAULT_MIN_RETRY_MS;
     s_ctx.config.max_retry_delay_ms = MQTT_DEFAULT_MAX_RETRY_MS;
     s_ctx.config.max_retry_attempts = MQTT_DEFAULT_MAX_ATTEMPTS;
     s_ctx.config.keepalive = MQTT_DEFAULT_KEEPALIVE;
-    /* other strings remain empty */
+    /* other strings remain empty (will be filled later) */
 
-    /* Initialize client abstraction with defaults (will be reconfigured later) */
+    /* Initialize client abstraction with default config (will be reconfigured later) */
     mqtt_client_config_t client_cfg = {
         .broker_uri = "mqtt://test.mosquitto.org:1883",
         .client_id = NULL,
@@ -103,12 +123,6 @@ esp_err_t mqtt_service_init(void)
 
     /* Register client callback */
     mqtt_client_register_callback(client_event_callback);
-
-    // /* Register WiFi event handler with core (assumed function) */
-    // err = service_register_event_handler(EVENT_WIFI_GOT_IP, wifi_event_handler, NULL);
-    // if (err != ESP_OK) return err;
-    // err = service_register_event_handler(EVENT_WIFI_DISCONNECTED, wifi_event_handler, NULL);
-    // if (err != ESP_OK) return err;
 
     /* Create service task */
     BaseType_t ret = xTaskCreate(mqtt_service_task, "mqtt_svc", 4096, NULL, 5, &s_ctx.task);
@@ -295,9 +309,6 @@ static void mqtt_service_task(void *pvParameters)
                 case QUEUE_MSG_CLIENT_EVENT:
                     process_client_event(&item.msg.client_evt);
                     break;
-                // case QUEUE_MSG_WIFI_EVENT:
-                //     process_wifi_event(&item.msg.wifi_evt);
-                //     break;
                 case QUEUE_MSG_RETRY:
                     process_retry();
                     break;
@@ -335,10 +346,11 @@ static void process_command(const command_msg_t *cmd)
 
             /* Only allow connect from IDLE or FAILED */
             if (s_ctx.state != MQTT_STATE_IDLE && s_ctx.state != MQTT_STATE_FAILED) {
+                ESP_LOGD(TAG, "Connect ignored, current state %d", s_ctx.state);
                 return;
             }
 
-            /* If WiFi not connected, stay in IDLE (will be triggered when WiFi comes up) */
+            /* If WiFi not connected, stay in IDLE (will be triggered when WiFi becomes available) */
             if (!s_ctx.wifi_connected) {
                 ESP_LOGD(TAG, "WiFi not connected, deferring MQTT connect");
                 return;
@@ -365,10 +377,13 @@ static void process_command(const command_msg_t *cmd)
             };
 
             /* Re-initialize client with new config (stop first if needed) */
-            mqtt_client_stop();  /* ignore error, may not be started */
+            mqtt_client_stop();  /* Safe to call even if not started */
             esp_err_t err = mqtt_client_init(&client_cfg);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to init MQTT client");
+                ESP_LOGE(TAG, "Failed to init MQTT client: %s", esp_err_to_name(err));
+                set_state(MQTT_STATE_FAILED);
+                mqtt_event_connection_failed_t evt = { .attempts = s_ctx.retry_count + 1 };
+                emit_event(EVENT_MQTT_CONNECTION_FAILED, &evt);
                 return;
             }
 
@@ -455,6 +470,7 @@ static void process_command(const command_msg_t *cmd)
             break;
 
         default:
+            ESP_LOGW(TAG, "Unknown command %d", cmd->cmd_id);
             break;
     }
 }
@@ -486,7 +502,7 @@ static void process_client_event(const client_event_msg_t *evt)
                 return;
             }
 
-            /* Automatic reconnect logic (if WiFi is connected) */
+            /* Automatic reconnect logic (only if WiFi is connected) */
             if (s_ctx.wifi_connected &&
                 (s_ctx.state == MQTT_STATE_CONNECTING ||
                  s_ctx.state == MQTT_STATE_CONNECTED ||
@@ -504,27 +520,19 @@ static void process_client_event(const client_event_msg_t *evt)
 
                 start_reconnect_timer();
                 set_state(MQTT_STATE_RECONNECT_WAIT);
+            } else {
+                /* WiFi not connected: stay in IDLE */
+                set_state(MQTT_STATE_IDLE);
             }
             break;
         }
 
-        case MQTT_CLIENT_EVENT_DATA: {
-            /* Forward to core as EVENT_NETWORK_MESSAGE_RECEIVED */
-            /* Payload must be copied because client data pointers are temporary */
-            mqtt_message_t msg;
-            strlcpy(msg.topic, evt->data.data.topic, sizeof(msg.topic));
-            size_t copy_len = evt->data.data.payload_len;
-            if (copy_len > sizeof(msg.payload)) copy_len = sizeof(msg.payload);
-            memcpy(msg.payload, evt->data.data.payload, copy_len);
-            msg.payload_len = copy_len;
-            msg.qos = evt->data.data.qos;
-            msg.retain = evt->data.data.retain;
-            emit_event(EVENT_NETWORK_MESSAGE_RECEIVED, &msg);
+        case MQTT_CLIENT_EVENT_DATA:
+            /* The message is already fully copied; just forward it */
+            emit_event(EVENT_NETWORK_MESSAGE_RECEIVED, (void*)&evt->data.message);
             break;
-        }
 
         case MQTT_CLIENT_EVENT_SUBSCRIBED:
-            /* Can be ignored or used for logging */
             ESP_LOGD(TAG, "Subscribed ack msg_id=%d", evt->data.msg_id);
             break;
 
@@ -540,32 +548,6 @@ static void process_client_event(const client_event_msg_t *evt)
             break;
     }
 }
-
-// /*============================================================================
-//  * WiFi Event Processing
-//  *============================================================================*/
-
-// static void process_wifi_event(const wifi_event_msg_t *evt)
-// {
-//     if (evt->event == EVENT_WIFI_GOT_IP) {
-//         s_ctx.wifi_connected = true;
-//         /* If we are in IDLE and have a pending connection request? Not stored.
-//          * The user must issue CMD_CONNECT_MQTT again, or we could auto-connect
-//          * if we were previously connecting before WiFi loss. For simplicity,
-//          * we require explicit connect after WiFi up. */
-//     } else if (evt->event == EVENT_WIFI_DISCONNECTED) {
-//         s_ctx.wifi_connected = false;
-//         /* Pause any ongoing reconnect attempts */
-//         if (s_ctx.state == MQTT_STATE_RECONNECT_WAIT) {
-//             stop_reconnect_timer();
-//             set_state(MQTT_STATE_IDLE);  /* Will retry when WiFi returns and user reconnects */
-//         } else if (s_ctx.state == MQTT_STATE_CONNECTING ||
-//                    s_ctx.state == MQTT_STATE_CONNECTED) {
-//             /* Force disconnect? The client will eventually get DISCONNECTED event.
-//              * We'll let the client handle it. */
-//         }
-//     }
-// }
 
 /*============================================================================
  * Reconnect Timer Processing
@@ -585,6 +567,10 @@ static void process_retry(void)
             fake_evt.data.error_code = -1;
             process_client_event(&fake_evt);
         }
+    } else if (s_ctx.state == MQTT_STATE_RECONNECT_WAIT && !s_ctx.wifi_connected) {
+        /* WiFi went down while waiting; go back to IDLE */
+        stop_reconnect_timer();
+        set_state(MQTT_STATE_IDLE);
     }
 }
 
@@ -634,9 +620,15 @@ static void client_event_callback(mqtt_client_event_t event, void *data)
             break;
         case MQTT_CLIENT_EVENT_DATA:
             if (data) {
-                /* Copy only the data structure; topic/payload pointers are ephemeral,
-                 * but we need them for the queue. We'll copy them in process_client_event. */
-                item.msg.client_evt.data.data = *(mqtt_client_data_t*)data;
+                mqtt_client_data_t *src = (mqtt_client_data_t*)data;
+                mqtt_message_t *msg = &item.msg.client_evt.data.message;
+                strlcpy(msg->topic, src->topic, sizeof(msg->topic));
+                size_t copy_len = src->payload_len;
+                if (copy_len > sizeof(msg->payload)) copy_len = sizeof(msg->payload);
+                memcpy(msg->payload, src->payload, copy_len);
+                msg->payload_len = copy_len;
+                msg->qos = src->qos;
+                msg->retain = src->retain;
             }
             break;
         case MQTT_CLIENT_EVENT_SUBSCRIBED:
@@ -650,24 +642,6 @@ static void client_event_callback(mqtt_client_event_t event, void *data)
 
     xQueueSend(s_ctx.queue, &item, 0);
 }
-
-// /*============================================================================
-//  * WiFi Event Handler (called from core event loop)
-//  *============================================================================*/
-
-// static void wifi_event_handler(system_event_id_t event, void *data, void *ctx)
-// {
-//     (void)data;
-//     (void)ctx;
-//     if (!s_ctx.queue) return;
-
-//     queue_item_t item;
-//     item.type = QUEUE_MSG_WIFI_EVENT;
-//     item.msg.wifi_evt.event = event;
-//     item.msg.wifi_evt.got_ip = (event == EVENT_WIFI_GOT_IP);
-
-//     xQueueSend(s_ctx.queue, &item, 0);
-// }
 
 /*============================================================================
  * State Management and Event Emission

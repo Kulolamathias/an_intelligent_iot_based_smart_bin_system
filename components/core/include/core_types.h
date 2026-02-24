@@ -1,6 +1,7 @@
 /**
- * @file core_types.h
+ * @file components/core/include/core_types.h
  * @brief Core Type Definitions – Shared Data Structures
+ * @date 2026-02-24
  *
  * =============================================================================
  * ARCHITECTURAL ROLE

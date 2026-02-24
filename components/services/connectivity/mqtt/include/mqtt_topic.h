@@ -1,3 +1,34 @@
+/**
+ * @file mqtt_topic.h
+ * @brief MQTT Topic Abstraction – Device‑specific Topic Construction
+ *
+ * =============================================================================
+ * ARCHITECTURAL ROLE
+ * =============================================================================
+ * This module provides functions to build MQTT topic strings based on the
+ * device's MAC address. The base topic format is "devices/<mac>/", ensuring
+ * uniqueness across devices. It eliminates hard‑coded topic strings elsewhere.
+ *
+ * =============================================================================
+ * OWNERSHIP
+ * =============================================================================
+ * - Defines: public API for topic construction.
+ * - Does NOT: depend on any other modules.
+ *
+ * =============================================================================
+ * INVARIANTS
+ * =============================================================================
+ * - No dynamic memory allocation; all buffers are provided by the caller.
+ * - The base topic is stored in a static internal buffer after initialization.
+ * - All functions validate buffer sizes to prevent overflows.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #ifndef MQTT_TOPIC_H
 #define MQTT_TOPIC_H
 

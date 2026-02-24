@@ -1,3 +1,35 @@
+/**
+ * @file mqtt_client_abstraction.h
+ * @brief MQTT Client Abstraction – Transport‑only Wrapper for ESP‑MQTT
+ *
+ * =============================================================================
+ * ARCHITECTURAL ROLE
+ * =============================================================================
+ * This layer encapsulates the ESP‑IDF MQTT client driver. It provides a
+ * simplified, deterministic interface for the higher‑level MQTT service.
+ * No business logic, reconnect logic, or topic parsing is present.
+ *
+ * =============================================================================
+ * OWNERSHIP
+ * =============================================================================
+ * - Defines: configuration structures, event types, and public API.
+ * - Does NOT: maintain any persistent state outside its own static context.
+ *
+ * =============================================================================
+ * INVARIANTS
+ * =============================================================================
+ * - All public functions validate their arguments.
+ * - The internal context is static and not exposed to callers.
+ * - Strings passed in the configuration are copied internally; the caller
+ *   may free them immediately after calling mqtt_client_init().
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #ifndef MQTT_CLIENT_ABSTRACTION_H
 #define MQTT_CLIENT_ABSTRACTION_H
 

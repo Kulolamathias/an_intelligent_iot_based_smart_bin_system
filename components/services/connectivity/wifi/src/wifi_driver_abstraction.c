@@ -1,3 +1,22 @@
+/**
+ * @file wifi_driver_abstraction.c
+ * @brief Implementation of the WiFi driver abstraction.
+ *
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - Uses ESP‑IDF's esp_wifi, esp_event, and esp_netif components.
+ * - Internal context is static; all functions operate on that single instance.
+ * - A mutex protects the context from concurrent access.
+ * - Driver event handlers forward events to the registered user callback.
+ *
+ * =============================================================================
+ * @version 1.0.0
+ * @date 2026-02-24
+ * @author System Architecture Team
+ * =============================================================================
+ */
+
 #include "wifi_driver_abstraction.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -9,18 +28,18 @@
 #define WIFI_MAX_SSID_LEN   32
 #define WIFI_MAX_PASS_LEN   64
 
-/* Private context ----------------------------------------------------------*/
+/* Private context (static) */
 typedef struct {
-    bool initialized;
-    bool started;
-    wifi_driver_event_cb_t user_cb;
-    esp_netif_t *sta_netif;
-    SemaphoreHandle_t mutex;
+    bool initialized;                       /**< true after wifi_driver_init() succeeds */
+    bool started;                            /**< true after wifi_driver_start() succeeds */
+    wifi_driver_event_cb_t user_cb;          /**< User‑registered callback function */
+    esp_netif_t *sta_netif;                  /**< Handle to the station network interface */
+    SemaphoreHandle_t mutex;                  /**< Mutex for thread‑safe context access */
 } wifi_driver_context_t;
 
 static wifi_driver_context_t s_ctx = {0};
 
-/* Lock helpers -------------------------------------------------------------*/
+/* Lock helpers */
 static void lock_context(void) {
     if (s_ctx.mutex) {
         xSemaphoreTake(s_ctx.mutex, portMAX_DELAY);
@@ -33,7 +52,7 @@ static void unlock_context(void) {
     }
 }
 
-/* Event handlers ------------------------------------------------------------*/
+/* Event handlers (called from ESP‑IDF event task) */
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data)
 {
@@ -78,7 +97,8 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-/* Public functions ----------------------------------------------------------*/
+/* Public API ----------------------------------------------------------------*/
+
 esp_err_t wifi_driver_init(void)
 {
     esp_err_t ret;
@@ -102,7 +122,7 @@ esp_err_t wifi_driver_init(void)
     /* Create default station netif */
     s_ctx.sta_netif = esp_netif_create_default_wifi_sta();
     if (!s_ctx.sta_netif) {
-        /* Cleanup mutex? We keep it for possible future re-init. */
+        /* Keep mutex for possible future re‑init */
         return ESP_FAIL;
     }
 
