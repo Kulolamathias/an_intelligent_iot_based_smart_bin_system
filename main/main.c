@@ -38,6 +38,8 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
+#include "esp_efuse.h"
+#include "esp_mac.h"
 
 /* Core interfaces */
 #include "command_router.h"
@@ -55,7 +57,6 @@
 #define CONFIG_WIFI_SSID "Mathias' Sxx U..."
 #define CONFIG_WIFI_PASSWORD "1234567890223"
 #define CONFIG_MQTT_BROKER_URI "mqtt://102.223.8.140:1883"
-#define CONFIG_MQTT_CLIENT_ID "your_client_id"
 #define CONFIG_MQTT_USERNAME "mqtt_user"
 #define CONFIG_MQTT_PASSWORD "ega12345"
 
@@ -137,9 +138,20 @@ void app_main(void)
     /* --------------------------------------------------------------------
      * 6. Connect to MQTT broker
      * -------------------------------------------------------------------- */
+
+     /* Read MAC address to create unique client ID */
+    uint8_t mac[6];
+    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+    char mac_str[13];
+    snprintf(mac_str, sizeof(mac_str), "%02x%02x%02x%02x%02x%02x",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    char client_id[20];
+    snprintf(client_id, sizeof(client_id), "bin_%s", mac_str);
+
     cmd_connect_mqtt_params_t mqtt_conn = {
         .broker_uri = CONFIG_MQTT_BROKER_URI,
-        .client_id = CONFIG_MQTT_CLIENT_ID,
+        .client_id = "",               /* temporary, will be overwritten */
         .username = CONFIG_MQTT_USERNAME,
         .password = CONFIG_MQTT_PASSWORD,
         .keepalive = 120,
@@ -152,6 +164,7 @@ void app_main(void)
         .max_retry_delay_ms = 30000,
         .max_retry_attempts = 5
     };
+    strlcpy(mqtt_conn.client_id, client_id, sizeof(mqtt_conn.client_id));
     ESP_LOGI(TAG, "Connecting to MQTT broker...");
     command_router_execute(CMD_CONNECT_MQTT, &mqtt_conn);
 

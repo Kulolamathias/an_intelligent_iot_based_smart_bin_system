@@ -137,6 +137,8 @@ typedef enum {
      * -------------------------------------------------------- */
     EVENT_GPS_COORDINATES_UPDATED,  /**< New GPS fix acquired */
 
+    EVENT_REDIRECT_TO_BIN,           /**< System should redirect user to another bin (payload: redirect_info_t) */
+
     /* --------------------------------------------------------
      * Power management
      * -------------------------------------------------------- */
@@ -178,6 +180,12 @@ typedef struct {
     bool retain;
 } mqtt_message_t;
 
+typedef struct {
+    char peer_id[13];             /**< ID of the target bin (MAC address string) */
+    float latitude;                /**< Latitude of target bin */
+    float longitude;               /**< Longitude of target bin */
+    float distance;                /**< Distance to target bin in meters */
+} redirect_info_t;
 
 typedef struct {
     system_event_id_t id;           /**< Event type – MUST be first field */
@@ -228,6 +236,8 @@ typedef struct {
         mqtt_event_disconnected_t mqtt_disconnected;
         mqtt_event_connection_failed_t mqtt_connection_failed;
         mqtt_message_t mqtt_message;
+
+        redirect_info_t redirect_info;
 
         /* Reserved for future expansion – always zero */
         struct {

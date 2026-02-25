@@ -111,6 +111,10 @@ typedef enum {
     CMD_SET_GSM_PASSWORD,       /**< Set GSM password (params: string) – optional */
     CMD_SET_AUTHORIZED_NUMBERS, /**< Set authorized numbers (params: array) – optional */
 
+    CMD_BIN_NET_NOTIFY_MQTT_CONNECTED,  /**< Inform neighbor bins of MQTT connection */
+    CMD_BIN_NET_NOTIFY_NETWORK_MESSAGE, /**< Notify neighbor bins of network message */
+    CMD_BIN_NET_NOTIFY_LEVEL_UPDATE,    /**< Notify neighbor bins of level update */
+
     /* --------------------------------------------------------
      * Sensor commands – measurement triggers
      * -------------------------------------------------------- */

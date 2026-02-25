@@ -12,6 +12,7 @@ idf_component_register(
         "connectivity/mqtt/src/mqtt_service.c"
         "connectivity/mqtt/src/mqtt_topic.c"
 
+        "networking/bin_network_service/bin_network_service.c"
 
         "sensing/ultrasonic/ultrasonic_service.c"
         "actuation/servo_service/servo_service.c"
@@ -36,6 +37,8 @@ idf_component_register(
         "connectivity/wifi/include"
         "connectivity/mqtt/include"
 
+        "networking/bin_network_service"
+
         "indicator"
         "location"
         "example"
@@ -48,5 +51,6 @@ idf_component_register(
         nvs_flash
         esp_netif
         esp_wifi
-        efuse      #**< for MAC address in mqtt..*/
+        efuse
+        json
 )

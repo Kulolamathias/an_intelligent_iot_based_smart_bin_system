@@ -161,6 +161,16 @@ typedef struct {
     char topic[128];
 } cmd_unsubscribe_mqtt_params_t;
 
+typedef struct {
+    char topic[128];
+    uint8_t payload[512];
+    size_t payload_len;
+} cmd_bin_net_network_msg_t;
+
+typedef struct {
+    uint8_t fill_level_percent;
+} cmd_bin_net_level_update_t;
+
 /* For CMD_MQTT_SET_WIFI_STATE, we can use the generic status_value field.
  * No new struct needed, but we need a way to pass a boolean. The command
  * router passes a void*; we can cast a uint32_t. For clarity, define:

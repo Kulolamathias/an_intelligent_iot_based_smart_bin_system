@@ -10,4 +10,5 @@ idf_component_register(
         utils
         tests
         esp_event
+        efuse
 )

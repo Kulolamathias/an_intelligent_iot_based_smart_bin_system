@@ -523,6 +523,10 @@ esp_err_t state_manager_process_event(const system_event_t *event)
     switch (event->id) {
         case EVENT_BIN_LEVEL_UPDATED:
             g_context.bin_fill_level_percent = event->data.bin_level.fill_level_percent;
+            cmd_bin_net_level_update_t lvl = {
+                .fill_level_percent = event->data.bin_level.fill_level_percent
+            };
+            command_router_execute(CMD_BIN_NET_NOTIFY_LEVEL_UPDATE, &lvl);
             break;
         case EVENT_AUTH_GRANTED:
             g_context.auth_status = AUTH_STATUS_GRANTED;
@@ -532,6 +536,17 @@ esp_err_t state_manager_process_event(const system_event_t *event)
             break;
         case EVENT_GPS_COORDINATES_UPDATED:
             g_context.gps_coordinates = event->data.gps_update.coordinates;
+            break;
+        case EVENT_MQTT_CONNECTED:
+            command_router_execute(CMD_BIN_NET_NOTIFY_MQTT_CONNECTED, NULL);
+            break;
+
+        case EVENT_NETWORK_MESSAGE_RECEIVED:
+            cmd_bin_net_network_msg_t msg;
+            strlcpy(msg.topic, event->data.mqtt_message.topic, sizeof(msg.topic));
+            memcpy(msg.payload, event->data.mqtt_message.payload, event->data.mqtt_message.payload_len);
+            msg.payload_len = event->data.mqtt_message.payload_len;
+            command_router_execute(CMD_BIN_NET_NOTIFY_NETWORK_MESSAGE, &msg);
             break;
         /* EVENT_NEIGHBOR_STATUS_RECEIVED: core does not store neighbor data */
         default:

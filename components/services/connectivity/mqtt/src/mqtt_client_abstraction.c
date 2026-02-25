@@ -272,7 +272,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
 
         case MQTT_EVENT_DISCONNECTED:
-            s_ctx.user_cb(MQTT_CLIENT_EVENT_DISCONNECTED, &event->error_handle->connect_return_code);
+            int reason = -1;
+            if (event->error_handle) {
+                reason = event->error_handle->connect_return_code;
+            }
+            s_ctx.user_cb(MQTT_CLIENT_EVENT_DISCONNECTED, &reason);
             break;
 
         case MQTT_EVENT_DATA: {

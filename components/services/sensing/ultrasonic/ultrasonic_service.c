@@ -25,10 +25,10 @@
 /* ============================================================
  * Kconfig / Default Configuration (to be replaced by config service)
  * ============================================================ */
-#define FILL_SENSOR_TRIG_PIN        6       /**<  */
-#define FILL_SENSOR_ECHO_PIN        7
-#define INTENT_SENSOR_TRIG_PIN      4
-#define INTENT_SENSOR_ECHO_PIN      5
+#define FILL_SENSOR_TRIG_PIN        12       /**<  */
+#define FILL_SENSOR_ECHO_PIN        13
+#define INTENT_SENSOR_TRIG_PIN      14
+#define INTENT_SENSOR_ECHO_PIN      27
 #define SENSOR_TIMEOUT_US           30000   /* 30ms max range ~5m */
 #define INTENT_THRESHOLD_CM         30      /* distance < 30cm = person present */
 #define BIN_HEIGHT_CM               100     /* total bin height (example) */

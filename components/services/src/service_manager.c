@@ -20,6 +20,7 @@
 #include "servo_service.h"
 #include "wifi_service.h"
 #include "mqtt_service.h"
+#include "bin_network_service.h"
 
 
 static const char *TAG = "SERVICE_MGR";
@@ -70,6 +71,12 @@ static const service_entry_t s_services[] = {
         .init = mqtt_service_init,
         .register_handlers = mqtt_service_register_handlers,
         .start = mqtt_service_start
+    },
+    {
+        .name = "bin_network",
+        .init = bin_network_service_init,
+        .register_handlers = bin_network_service_register_commands,
+        .start = bin_network_service_start
     },
     {
         .name = "ultrasonic",
