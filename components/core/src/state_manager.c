@@ -45,7 +45,13 @@
 
 #define MAX_COMMANDS_PER_TRANSITION 12
 
-
+/* Helper macro to define a command batch with automatic count */
+#define COMMAND_BATCH(...) \
+    { \
+        .commands = { __VA_ARGS__ }, \
+        .count = sizeof((transition_command_t[]){ __VA_ARGS__ }) / sizeof(transition_command_t) \
+    }
+    
 static const char *TAG = "StateManager";
 
 /* ============================================================
@@ -324,15 +330,12 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_WIFI_CONNECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_START_PIR_MONITORING, NULL },  /* start PIR polling */
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_SEND_HEARTBEAT, NULL },
-                { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
-            },
-            .count = 4
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_START_PIR_MONITORING, NULL },  /* start PIR polling */
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_SEND_HEARTBEAT, NULL },
+            { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
+        )
     },
 
     /* --------------------------------------------------------
@@ -343,14 +346,11 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_PERSON_DETECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ACTIVE,
-        .command_batch = {
-            .commands = {
-                { CMD_UPDATE_INDICATORS, NULL },                /* LED/buzzer attention */
-                { CMD_SHOW_MESSAGE, NULL },                     /* "Raise waste to open" */
-                { CMD_LED_BLINK, prepare_led_blink_attention }  /* White LED (LED0) blink attention */
-            },
-            .count = 3
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_UPDATE_INDICATORS, NULL },                /* LED/buzzer attention */
+            { CMD_SHOW_MESSAGE, NULL },                     /* "Raise waste to open" */
+            { CMD_LED_BLINK, prepare_led_blink_attention }  /* White LED (LED0) blink attention */
+        )
     },
     /* ----------------------------------------------------------------------------------------
      * IDLE → ACTIVE (intention confirmed(by event close range) – open lid, start timer)
@@ -360,17 +360,14 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_CLOSE_RANGE_DETECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ACTIVE,
-        .command_batch = {
-            .commands = {
-                { CMD_OPEN_LID, NULL },
-                { CMD_START_INTENT_TIMER, prepare_intent_timer },
-                { CMD_UPDATE_INDICATORS, NULL },    /* success pattern */
-                { CMD_LED_BLINK_STOP, NULL },   /* stop white LED blink (LED0) */
-                { CMD_LED_ON, NULL },            /* turn green LED (LED1) on */
-                { CMD_LED_BLINK, prepare_led_blink_attention }
-            },
-            .count = 6
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_OPEN_LID, NULL },
+            { CMD_START_INTENT_TIMER, prepare_intent_timer },
+            { CMD_UPDATE_INDICATORS, NULL },    /* success pattern */
+            { CMD_LED_BLINK_STOP, NULL },   /* stop white LED blink (LED0) */
+            { CMD_LED_ON, NULL },            /* turn green LED (LED1) on */
+            { CMD_LED_BLINK, prepare_led_blink_attention }
+        )
     },
 
     /* --------------------------------------------------------
@@ -381,16 +378,13 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_CLOSE_RANGE_DETECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ACTIVE,      /* remain active */
-        .command_batch = {
-            .commands = {
-                { CMD_OPEN_LID, NULL },
-                { CMD_START_INTENT_TIMER, prepare_intent_timer },
-                { CMD_UPDATE_INDICATORS, NULL },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_LED_SET_BRIGHTNESS, prepare_led_on_green }
-            },
-            .count = 5
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_OPEN_LID, NULL },
+            { CMD_START_INTENT_TIMER, prepare_intent_timer },
+            { CMD_UPDATE_INDICATORS, NULL },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_green }
+        )
     },
 
     /* --------------------------------------------------------
@@ -401,27 +395,23 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_LID_CLOSED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_STOP_INTENT_TIMER, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_LED_OFF, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_blue },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white }
-            },
-            .count = 8
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_STOP_INTENT_TIMER, NULL },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_LED_OFF, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_blue },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white }
+        )
     },
     {
         .current_state = SYSTEM_STATE_ACTIVE,
         .event_id      = EVENT_INTENT_TIMEOUT,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
+        .command_batch = COMMAND_BATCH(
                 { CMD_CLOSE_LID, NULL },
                 { CMD_UPDATE_DISPLAY, NULL },
                 { CMD_LED_OFF, prepare_led_off_white },
@@ -430,28 +420,23 @@ static const state_transition_rule_t g_transition_table[] =
                 { CMD_LED_OFF, prepare_led_off_red },
                 { CMD_LED_OFF, prepare_led_off_blue },
                 { CMD_LED_BLINK_STOP, prepare_led_off_white }
-            },
-            .count = 8
-        }
+            )
     },
     {
         .current_state = SYSTEM_STATE_ACTIVE,
         .event_id      = EVENT_PERSON_LEFT,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_CLOSE_LID, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_LED_OFF, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_blue },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white }
-            },
-            .count = 8
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_CLOSE_LID, NULL },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_LED_OFF, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_blue },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white }
+        )
     },
 
     /* --------------------------------------------------------
@@ -462,14 +447,11 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_FILL_LEVEL_UPDATED,
         .condition     = condition_bin_near_full,
         .next_state    = SYSTEM_STATE_NEAR_FULL,
-        .command_batch = {
-            .commands = {
-                { CMD_SEND_NOTIFICATION, prepare_near_full_notification },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_LED_BLINK, prepare_led_blink_slow }
-            },
-            .count = 3
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_SEND_NOTIFICATION, prepare_near_full_notification },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_LED_BLINK, prepare_led_blink_slow }
+        )
     },
 
     /* --------------------------------------------------------
@@ -480,18 +462,15 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_FILL_LEVEL_UPDATED,
         .condition     = condition_bin_full,
         .next_state    = SYSTEM_STATE_FULL,
-        .command_batch = {
-            .commands = {
-                { CMD_LOCK_BIN, NULL },
-                { CMD_SEND_NOTIFICATION, prepare_full_notification },
-                { CMD_SHOW_MESSAGE, prepare_show_full_message },
-                { CMD_UPDATE_INDICATORS, NULL },
-                { CMD_START_ESCALATION_TIMER, prepare_escalation_timer },
-                { CMD_LED_BLINK_STOP, prepare_led_off_yellow },               /* stop yellow blink */
-                { CMD_LED_BLINK, prepare_led_blink_fast }   /* start red fast blink */
-            },
-            .count = 7
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_LOCK_BIN, NULL },
+            { CMD_SEND_NOTIFICATION, prepare_full_notification },
+            { CMD_SHOW_MESSAGE, prepare_show_full_message },
+            { CMD_UPDATE_INDICATORS, NULL },
+            { CMD_START_ESCALATION_TIMER, prepare_escalation_timer },
+            { CMD_LED_BLINK_STOP, prepare_led_off_yellow },               /* stop yellow blink */
+            { CMD_LED_BLINK, prepare_led_blink_fast }   /* start red fast blink */
+        )
     },
     
     /* --------------------------------------------------------
@@ -502,18 +481,15 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_FILL_LEVEL_UPDATED,
         .condition     = condition_bin_not_near_full,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_LED_BLINK_STOP, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_blue }
-            },
-            .count = 7
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_LED_BLINK_STOP, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_blue }
+        )
     },
 
     /* --------------------------------------------------------
@@ -524,21 +500,18 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_FILL_LEVEL_UPDATED,
         .condition     = condition_bin_not_full,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_UNLOCK_BIN, NULL },
-                { CMD_SEND_NOTIFICATION, prepare_empty_notification },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_STOP_ESCALATION_TIMER, NULL },
-                { CMD_LED_BLINK_STOP, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_blue }
-            },
-            .count = 9
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_UNLOCK_BIN, NULL },
+            { CMD_SEND_NOTIFICATION, prepare_empty_notification },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_STOP_ESCALATION_TIMER, NULL },
+            { CMD_LED_BLINK_STOP, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_blue }
+        )
     },
 
     /* --------------------------------------------------------
@@ -549,12 +522,9 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_ESCALATION_TIMEOUT,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_FULL,
-        .command_batch = {
-            .commands = {
-                { CMD_SEND_ESCALATION_NOTIFICATION, NULL }
-            },
-            .count = 1
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_SEND_ESCALATION_NOTIFICATION, NULL }
+        )
     },
 
     /* --------------------------------------------------------
@@ -565,40 +535,34 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_AUTH_GRANTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_MAINTENANCE,
-        .command_batch = {
-            .commands = {
-                { CMD_UNLOCK_BIN, NULL },
-                { CMD_ENTER_MAINTENANCE_MODE, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
-            },
-            .count = 9
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_UNLOCK_BIN, NULL },
+            { CMD_ENTER_MAINTENANCE_MODE, NULL },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
+        )
     },
     {
         .current_state = SYSTEM_STATE_FULL,
         .event_id      = EVENT_AUTH_GRANTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_MAINTENANCE,
-        .command_batch = {
-            .commands = {
-                { CMD_UNLOCK_BIN, NULL },
-                { CMD_ENTER_MAINTENANCE_MODE, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_LED_OFF, prepare_led_off_green },
-                { CMD_LED_OFF, prepare_led_off_yellow },
-                { CMD_LED_OFF, prepare_led_off_red },
-                { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
-            },
-            .count = 9
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_UNLOCK_BIN, NULL },
+            { CMD_ENTER_MAINTENANCE_MODE, NULL },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
+        )
     },
 
     /* --------------------------------------------------------
@@ -609,16 +573,13 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_MAINTENANCE_COMPLETED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = {
-            .commands = {
-                { CMD_EXIT_MAINTENANCE_MODE, NULL },
-                { CMD_SAVE_CONFIGURATION, NULL },
-                { CMD_LOCK_BIN, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
-                { CMD_LED_OFF, prepare_led_off_blue }
-            },
-            .count = 5
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_EXIT_MAINTENANCE_MODE, NULL },
+            { CMD_SAVE_CONFIGURATION, NULL },
+            { CMD_LOCK_BIN, NULL },
+            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_LED_OFF, prepare_led_off_blue }
+        )
     },
 
     /* --------------------------------------------------------
@@ -629,36 +590,30 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_SENSOR_FAILURE,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ERROR,
-        .command_batch = {
-            .commands = { 
-                { CMD_SIGNAL_ERROR, NULL },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_LED_BLINK_STOP, prepare_led_off_green },
-                { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
-                { CMD_LED_BLINK_STOP, prepare_led_off_red },
-                { CMD_LED_BLINK_STOP, prepare_led_off_blue },
-                { CMD_LED_BLINK, prepare_led_blink_fast }
-            },
-            .count = 7
-        }
+        .command_batch = COMMAND_BATCH( 
+            { CMD_SIGNAL_ERROR, NULL },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_BLINK_STOP, prepare_led_off_green },
+            { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
+            { CMD_LED_BLINK_STOP, prepare_led_off_red },
+            { CMD_LED_BLINK_STOP, prepare_led_off_blue },
+            { CMD_LED_BLINK, prepare_led_blink_fast }
+        )
     },
     {
         .current_state = SYSTEM_STATE_ANY,
         .event_id      = EVENT_SYSTEM_ERROR_DETECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ERROR,
-        .command_batch = {
-            .commands = {
-                { CMD_SIGNAL_ERROR, NULL },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_LED_BLINK_STOP, prepare_led_off_green },
-                { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
-                { CMD_LED_BLINK_STOP, prepare_led_off_red },
-                { CMD_LED_BLINK_STOP, prepare_led_off_blue },
-                { CMD_LED_BLINK, prepare_led_blink_fast }
-            },
-            .count = 7
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_SIGNAL_ERROR, NULL },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_BLINK_STOP, prepare_led_off_green },
+            { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
+            { CMD_LED_BLINK_STOP, prepare_led_off_red },
+            { CMD_LED_BLINK_STOP, prepare_led_off_blue },
+            { CMD_LED_BLINK, prepare_led_blink_fast }
+        )
     },
 
     /* --------------------------------------------------------
@@ -671,12 +626,9 @@ static const state_transition_rule_t g_transition_table[] =
         .event_id      = EVENT_WIFI_CONNECTED,
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ANY,
-        .command_batch = {
-            .commands = {
-                { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
-            },
-            .count = 1
-        }
+        .command_batch = COMMAND_BATCH(
+            { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
+        )
     },
 };
 
