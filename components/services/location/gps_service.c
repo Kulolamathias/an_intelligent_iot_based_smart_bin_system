@@ -1,20 +1,14 @@
 /**
- * @file gps_service.c
- * @brief Implementation of the GPS service.
+ * @file components/services/sensing/gps_service/gps_service.c
+ * @brief GPS Service – implementation.
  *
  * =============================================================================
  * IMPLEMENTATION NOTES
  * =============================================================================
- * - The service runs a single FreeRTOS task that processes commands and
- *   reads NMEA lines when started.
- * - Parsing is done manually (no sscanf) for efficiency and determinism.
- * - Checksums are validated.
- * - Fix is considered lost if no update within GPS_FIX_TIMEOUT_MS.
- *
- * =============================================================================
- * @version 1.0.0
- * @date 2026-03-01
- * @author System Architecture Team
+ * - Runs a dedicated task that polls the GPS driver every 500 ms.
+ * - When a valid fix is obtained, posts EVENT_GPS_FIX_UPDATED with raw data.
+ * - Enriches coordinates with a human‑readable name via a local mapping table.
+ * - The mapping table is initially static; later can be extended with NVS.
  * =============================================================================
  */
 
@@ -25,108 +19,389 @@
 #include "event_types.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
 #include "freertos/task.h"
-#include "driver/uart.h"
+#include "freertos/queue.h"
 #include <string.h>
-#include <stdlib.h>  // for strtol, strtof (no malloc)
+#include <math.h>
 
 static const char *TAG = "GPS_SVC";
 
-/* -------------------------------------------------------------------------
- * Constants
- * ------------------------------------------------------------------------- */
-#define GPS_SVC_QUEUE_SIZE      5
-#define GPS_SVC_TASK_STACK_SIZE 4096
-#define GPS_SVC_TASK_PRIORITY   5
-#define GPS_LINE_BUFFER_SIZE    128
-#define GPS_FIX_TIMEOUT_MS      5000   /* 5 seconds without update = lost */
+/* ============================================================
+ * Configuration
+ * ============================================================ */
+#define GPS_POLL_INTERVAL_MS       500     /* 0.5 second between reads */
+#define GPS_TASK_STACK_SIZE        4096
+#define GPS_TASK_PRIORITY          5
+#define MAX_KNOWN_LOCATIONS        32      /* Maximum entries in mapping table */
+#define GPS_DEFAULT_RADIUS_METERS  50      /* Default radius for location matching */
 
-/* UART configuration (hardcoded for now; could be made configurable) */
-#define GPS_UART_NUM     UART_NUM_2
-#define GPS_UART_BAUD     9600
-#define GPS_UART_TX_PIN   17     /* not used */
-#define GPS_UART_RX_PIN   16     /* example */
-
-/* -------------------------------------------------------------------------
- * Internal event types (for service's own queue)
- * ------------------------------------------------------------------------- */
+/* ============================================================
+ * Internal command types for service queue
+ * ============================================================ */
 typedef enum {
-    INT_EVT_CMD_START,
-    INT_EVT_CMD_STOP,
-    INT_EVT_CMD_GET_LAST_FIX,
-    INT_EVT_LINE_READY,      /* not used directly; we'll read lines in task loop */
-} internal_event_id_t;
+    GPS_CMD_START,          /* Start GPS acquisition */
+    GPS_CMD_STOP,           /* Stop GPS acquisition */
+    GPS_CMD_GET_FIX,        /* Get last fix immediately */
+    GPS_CMD_ADD_LOCATION,   /* Add/update known location */
+    GPS_CMD_SET_NAME        /* Set name for current location */
+} gps_internal_cmd_t;
 
 typedef struct {
-    internal_event_id_t id;
-    /* no payload for these commands */
-} internal_event_t;
+    gps_internal_cmd_t cmd;
+    union {
+        struct {
+            double latitude;
+            double longitude;
+            uint16_t radius_meters;
+            char name[64];
+        } add_location;
+        struct {
+            char name[64];
+        } set_name;
+    } data;
+} gps_msg_t;
 
-/* -------------------------------------------------------------------------
- * Service context (static)
- * ------------------------------------------------------------------------- */
+/* ============================================================
+ * Known location entry
+ * ============================================================ */
 typedef struct {
-    TaskHandle_t task;                 /**< Service task handle */
-    QueueHandle_t queue;                /**< Internal command queue */
-    gps_driver_handle_t driver;         /**< Handle to GPS driver */
-    bool started;                        /**< true if reading is active */
-    gps_fix_t current_fix;               /**< Last valid fix */
-    uint64_t last_update_ms;              /**< System time of last valid fix (ms) */
-    bool fix_valid;                       /**< true if fix is currently valid */
-} gps_service_ctx_t;
+    double latitude;            /* center latitude */
+    double longitude;           /* center longitude */
+    uint16_t radius_meters;     /* matching radius (meters) */
+    char name[64];              /* human‑readable name */
+    bool used;                  /* entry in use */
+} known_location_t;
 
-static gps_service_ctx_t s_ctx = {0};
+/* ============================================================
+ * Service context
+ * ============================================================ */
+typedef struct {
+    TaskHandle_t task;                  /* Service task handle */
+    QueueHandle_t queue;                /* Command queue */
+    gps_handle_t driver;                /* GPS driver handle */
+    gps_data_t last_data;               /* Most recent fix */
+    bool fix_valid;                     /* Current fix status */
+    bool running;                       /* True if acquisition active */
+    known_location_t known_locations[MAX_KNOWN_LOCATIONS];
+    uint32_t known_count;
+} gps_ctx_t;
 
-/* -------------------------------------------------------------------------
- * Forward declarations
- * ------------------------------------------------------------------------- */
-static void gps_service_task(void *pvParameters);
-static void process_command(const internal_event_t *ev);
-static void parse_nmea_line(const char *line, size_t len);
-static bool validate_checksum(const char *line);
-static double parse_degrees(const char *str, char dir);
-static uint64_t get_time_ms(void);
+static gps_ctx_t s_ctx = {0};
 
-/* -------------------------------------------------------------------------
+/* ============================================================
+ * Local static known location table (pre‑populated examples)
+ * ============================================================ */
+static const known_location_t s_default_locations[] = {
+    { -6.7924, 39.2083, 100, "Dar es Salaam", true },    // Example
+    { -6.1639, 35.7516, 100, "Dodoma", true },
+    { -3.3667, 36.6833, 100, "Arusha", true },
+    /* Add your own known locations here */
+};
+#define DEFAULT_LOCATION_COUNT (sizeof(s_default_locations) / sizeof(known_location_t))
+
+/* ============================================================
+ * Helper: haversine distance (meters)
+ * ============================================================ */
+static float haversine_meters(double lat1, double lon1, double lat2, double lon2)
+{
+    const double R = 6371000.0; /* metres */
+    double phi1 = lat1 * M_PI / 180.0;
+    double phi2 = lat2 * M_PI / 180.0;
+    double dphi = (lat2 - lat1) * M_PI / 180.0;
+    double dlambda = (lon2 - lon1) * M_PI / 180.0;
+    double a = sin(dphi/2) * sin(dphi/2) +
+               cos(phi1) * cos(phi2) *
+               sin(dlambda/2) * sin(dlambda/2);
+    double c = 2 * atan2(sqrt(a), sqrt(1-a));
+    return (float)(R * c);
+}
+
+/* ============================================================
+ * Enrich location with name from known table
+ * ============================================================ */
+static const char* find_location_name(double lat, double lon)
+{
+    float best_dist = GPS_DEFAULT_RADIUS_METERS;
+    const char *best_name = NULL;
+
+    for (int i = 0; i < MAX_KNOWN_LOCATIONS; i++) {
+        if (!s_ctx.known_locations[i].used) continue;
+        float dist = haversine_meters(lat, lon,
+                                       s_ctx.known_locations[i].latitude,
+                                       s_ctx.known_locations[i].longitude);
+        if (dist < best_dist) {
+            best_dist = dist;
+            best_name = s_ctx.known_locations[i].name;
+        }
+    }
+    return best_name;
+}
+
+/* ============================================================
+ * Post GPS fix event
+ * ============================================================ */
+static void post_gps_fix(void)
+{
+    event_t ev = {
+        .id = EVENT_GPS_FIX_UPDATED,
+        .timestamp_us = esp_timer_get_time(),
+        .source = 0,
+        .data = {0}
+    };
+    ev.data.gps_fix.valid = s_ctx.fix_valid;
+    ev.data.gps_fix.latitude = s_ctx.last_data.latitude;
+    ev.data.gps_fix.longitude = s_ctx.last_data.longitude;
+    ev.data.gps_fix.altitude_m = s_ctx.last_data.altitude_m;
+    ev.data.gps_fix.speed_kmh = s_ctx.last_data.speed_kmh;
+    ev.data.gps_fix.satellites = s_ctx.last_data.satellites;
+    ev.data.gps_fix.hdop = s_ctx.last_data.hdop;
+    ev.data.gps_fix.timestamp_ms = s_ctx.last_data.timestamp_ms;
+    service_post_event(&ev);
+    ESP_LOGD(TAG, "GPS fix posted: %.6f, %.6f", ev.data.gps_fix.latitude, ev.data.gps_fix.longitude);
+}
+
+/* ============================================================
+ * Post GPS fix lost event
+ * ============================================================ */
+static void post_gps_fix_lost(void)
+{
+    event_t ev = {
+        .id = EVENT_GPS_FIX_LOST,
+        .timestamp_us = esp_timer_get_time(),
+        .source = 0,
+        .data = {0}
+    };
+    service_post_event(&ev);
+    ESP_LOGD(TAG, "GPS fix lost");
+}
+
+/* ============================================================
+ * Update GPS data (called periodically)
+ * ============================================================ */
+static void update_gps_data(void)
+{
+    if (!s_ctx.running) return;
+
+    /* Read from driver */
+    esp_err_t ret = gps_driver_update(s_ctx.driver);
+    if (ret != ESP_OK && ret != ESP_ERR_TIMEOUT) {
+        ESP_LOGW(TAG, "GPS driver update failed: %d", ret);
+        return;
+    }
+
+    /* Get latest data */
+    gps_data_t new_data;
+    ret = gps_driver_get_data(s_ctx.driver, &new_data);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to get GPS data: %d", ret);
+        return;
+    }
+
+    /* Detect change in fix status */
+    bool new_fix = new_data.fix_valid;
+    if (new_fix != s_ctx.fix_valid) {
+        if (new_fix) {
+            /* Fix acquired */
+            s_ctx.last_data = new_data;
+            s_ctx.fix_valid = true;
+            post_gps_fix();
+        } else {
+            /* Fix lost */
+            s_ctx.fix_valid = false;
+            post_gps_fix_lost();
+        }
+    } else if (new_fix) {
+        /* Fix already valid, check if data changed significantly */
+        float delta = haversine_meters(s_ctx.last_data.latitude, s_ctx.last_data.longitude,
+                                        new_data.latitude, new_data.longitude);
+        if (delta > 1.0f || fabs(s_ctx.last_data.altitude_m - new_data.altitude_m) > 1.0f) {
+            s_ctx.last_data = new_data;
+            post_gps_fix();
+        }
+    }
+}
+
+/* ============================================================
+ * Service task
+ * ============================================================ */
+static void gps_service_task(void *arg)
+{
+    (void)arg;
+    gps_msg_t msg;
+    TickType_t last_wake = xTaskGetTickCount();
+
+    while (1) {
+        /* Process any commands from the queue (non‑blocking) */
+        while (xQueueReceive(s_ctx.queue, &msg, 0) == pdTRUE) {
+            switch (msg.cmd) {
+                case GPS_CMD_START:
+                    if (!s_ctx.running) {
+                        s_ctx.running = true;
+                        gps_driver_start(s_ctx.driver);
+                        ESP_LOGI(TAG, "GPS acquisition started");
+                    }
+                    break;
+                case GPS_CMD_STOP:
+                    if (s_ctx.running) {
+                        s_ctx.running = false;
+                        gps_driver_stop(s_ctx.driver);
+                        ESP_LOGI(TAG, "GPS acquisition stopped");
+                    }
+                    break;
+                case GPS_CMD_GET_FIX:
+                    if (s_ctx.fix_valid) {
+                        post_gps_fix();
+                    } else {
+                        ESP_LOGD(TAG, "No GPS fix available");
+                    }
+                    break;
+                case GPS_CMD_ADD_LOCATION: {
+                    const char *name = msg.data.add_location.name;
+                    double lat = msg.data.add_location.latitude;
+                    double lon = msg.data.add_location.longitude;
+                    uint16_t radius = msg.data.add_location.radius_meters;
+                    /* Find an empty slot or update existing */
+                    int idx = -1;
+                    for (int i = 0; i < MAX_KNOWN_LOCATIONS; i++) {
+                        if (!s_ctx.known_locations[i].used) {
+                            idx = i;
+                            break;
+                        }
+                        /* If name matches, update */
+                        if (s_ctx.known_locations[i].used &&
+                            strcmp(s_ctx.known_locations[i].name, name) == 0) {
+                            idx = i;
+                            break;
+                        }
+                    }
+                    if (idx >= 0) {
+                        s_ctx.known_locations[idx].latitude = lat;
+                        s_ctx.known_locations[idx].longitude = lon;
+                        s_ctx.known_locations[idx].radius_meters = radius;
+                        strlcpy(s_ctx.known_locations[idx].name, name,
+                                sizeof(s_ctx.known_locations[idx].name));
+                        s_ctx.known_locations[idx].used = true;
+                        ESP_LOGI(TAG, "Added location: %s (%.6f, %.6f)", name, lat, lon);
+                    } else {
+                        ESP_LOGW(TAG, "Known location table full");
+                    }
+                    break;
+                }
+                case GPS_CMD_SET_NAME: {
+                    if (s_ctx.fix_valid) {
+                        const char *name = msg.data.set_name.name;
+                        /* Add the current location with the given name */
+                        gps_msg_t add_msg = {
+                            .cmd = GPS_CMD_ADD_LOCATION,
+                            .data.add_location = {
+                                .latitude = s_ctx.last_data.latitude,
+                                .longitude = s_ctx.last_data.longitude,
+                                .radius_meters = GPS_DEFAULT_RADIUS_METERS
+                            }
+                        };
+                        strlcpy(add_msg.data.add_location.name, name,
+                                sizeof(add_msg.data.add_location.name));
+                        xQueueSend(s_ctx.queue, &add_msg, 0);
+                        ESP_LOGI(TAG, "Set name '%s' for current location", name);
+                    } else {
+                        ESP_LOGW(TAG, "No GPS fix to set name");
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        /* Update GPS data if running */
+        if (s_ctx.running) {
+            update_gps_data();
+        }
+
+        /* Wait for next polling interval */
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(GPS_POLL_INTERVAL_MS));
+    }
+}
+
+/* ============================================================
  * Command handlers (registered with command router)
- * ------------------------------------------------------------------------- */
-static esp_err_t handle_gps_start(void *context, void *params)
+ * ============================================================ */
+
+static esp_err_t cmd_gps_start(void *context, const command_param_union_t *params)
 {
-    (void)context;
-    (void)params;
-    internal_event_t ev = { .id = INT_EVT_CMD_START };
-    if (xQueueSend(s_ctx.queue, &ev, 0) != pdTRUE) {
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    (void)context; (void)params;
+    gps_msg_t msg = { .cmd = GPS_CMD_START };
+    return (xQueueSend(s_ctx.queue, &msg, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
 }
 
-static esp_err_t handle_gps_stop(void *context, void *params)
+static esp_err_t cmd_gps_stop(void *context, const command_param_union_t *params)
 {
-    (void)context;
-    (void)params;
-    internal_event_t ev = { .id = INT_EVT_CMD_STOP };
-    if (xQueueSend(s_ctx.queue, &ev, 0) != pdTRUE) {
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    (void)context; (void)params;
+    gps_msg_t msg = { .cmd = GPS_CMD_STOP };
+    return (xQueueSend(s_ctx.queue, &msg, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
 }
 
-static esp_err_t handle_gps_get_last_fix(void *context, void *params)
+static esp_err_t cmd_gps_get_last_fix(void *context, const command_param_union_t *params)
 {
-    (void)context;
-    (void)params;
-    internal_event_t ev = { .id = INT_EVT_CMD_GET_LAST_FIX };
-    if (xQueueSend(s_ctx.queue, &ev, 0) != pdTRUE) {
-        return ESP_FAIL;
-    }
-    return ESP_OK;
+    (void)context; (void)params;
+    gps_msg_t msg = { .cmd = GPS_CMD_GET_FIX };
+    return (xQueueSend(s_ctx.queue, &msg, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
 }
 
-/*============================================================================
- * Public API (service manager lifecycle)
- *============================================================================*/
+static esp_err_t cmd_gps_add_known_location(void *context, const command_param_union_t *params)
+{
+    (void)context;
+    if (!params) return ESP_ERR_INVALID_ARG;
+    const gps_add_location_params_t *p = &params->gps_add_location;
+    gps_msg_t msg = {
+        .cmd = GPS_CMD_ADD_LOCATION,
+        .data.add_location = {
+            .latitude = p->latitude,
+            .longitude = p->longitude,
+            .radius_meters = p->radius_meters
+        }
+    };
+    strlcpy(msg.data.add_location.name, p->name, sizeof(msg.data.add_location.name));
+    return (xQueueSend(s_ctx.queue, &msg, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
+}
+
+static esp_err_t cmd_gps_set_location_name(void *context, const command_param_union_t *params)
+{
+    (void)context;
+    if (!params) return ESP_ERR_INVALID_ARG;
+    const gps_set_name_params_t *p = &params->gps_set_name;
+    gps_msg_t msg = {
+        .cmd = GPS_CMD_SET_NAME
+    };
+    strlcpy(msg.data.set_name.name, p->name, sizeof(msg.data.set_name.name));
+    return (xQueueSend(s_ctx.queue, &msg, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
+}
+
+/* Wrappers for command router (void* params) */
+static esp_err_t gps_start_wrapper(void *context, void *params)
+{
+    return cmd_gps_start(context, (const command_param_union_t*)params);
+}
+static esp_err_t gps_stop_wrapper(void *context, void *params)
+{
+    return cmd_gps_stop(context, (const command_param_union_t*)params);
+}
+static esp_err_t gps_get_last_fix_wrapper(void *context, void *params)
+{
+    return cmd_gps_get_last_fix(context, (const command_param_union_t*)params);
+}
+static esp_err_t gps_add_known_location_wrapper(void *context, void *params)
+{
+    return cmd_gps_add_known_location(context, (const command_param_union_t*)params);
+}
+static esp_err_t gps_set_location_name_wrapper(void *context, void *params)
+{
+    return cmd_gps_set_location_name(context, (const command_param_union_t*)params);
+}
+
+/* ============================================================
+ * Public API
+ * ============================================================ */
 
 esp_err_t gps_service_init(void)
 {
@@ -134,46 +409,44 @@ esp_err_t gps_service_init(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Create internal command queue */
-    s_ctx.queue = xQueueCreate(GPS_SVC_QUEUE_SIZE, sizeof(internal_event_t));
+    /* Create command queue */
+    s_ctx.queue = xQueueCreate(10, sizeof(gps_msg_t));
     if (!s_ctx.queue) {
         return ESP_ERR_NO_MEM;
     }
 
-    /* Initialize GPS driver */
-    esp_err_t ret = gps_driver_create(GPS_UART_NUM, GPS_UART_BAUD,
-                                      GPS_UART_TX_PIN, GPS_UART_RX_PIN,
-                                      &s_ctx.driver);
+    /* Create GPS driver */
+    gps_config_t cfg = {
+        .uart_num = UART_NUM_2,          /* Adjust to your hardware */
+        .tx_pin = GPIO_NUM_17,           /* GPS RX (to ESP TX) – adjust */
+        .rx_pin = GPIO_NUM_16,           /* GPS TX (to ESP RX) – adjust */
+        .baud_rate = 9600,
+        .rx_buffer_size = 1024
+    };
+    esp_err_t ret = gps_driver_create(&cfg, &s_ctx.driver);
     if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create GPS driver: %d", ret);
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         return ret;
     }
 
-    /* Start driver (UART reception) */
-    ret = gps_driver_start(s_ctx.driver);
-    if (ret != ESP_OK) {
-        gps_driver_delete(s_ctx.driver);
-        vQueueDelete(s_ctx.queue);
-        s_ctx.queue = NULL;
-        return ret;
+    /* Initialise known location table with default entries */
+    memset(s_ctx.known_locations, 0, sizeof(s_ctx.known_locations));
+    for (int i = 0; i < DEFAULT_LOCATION_COUNT && i < MAX_KNOWN_LOCATIONS; i++) {
+        s_ctx.known_locations[i] = s_default_locations[i];
     }
+    s_ctx.known_count = DEFAULT_LOCATION_COUNT;
 
     /* Create service task */
-    BaseType_t ret_task = xTaskCreate(gps_service_task, "gps_svc",
-                                      GPS_SVC_TASK_STACK_SIZE, NULL,
-                                      GPS_SVC_TASK_PRIORITY, &s_ctx.task);
+    BaseType_t ret_task = xTaskCreate(gps_service_task, "gps_svc", GPS_TASK_STACK_SIZE,
+                                       NULL, GPS_TASK_PRIORITY, &s_ctx.task);
     if (ret_task != pdPASS) {
-        gps_driver_stop(s_ctx.driver);
         gps_driver_delete(s_ctx.driver);
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         return ESP_ERR_NO_MEM;
     }
-
-    s_ctx.started = false;
-    s_ctx.fix_valid = false;
-    memset(&s_ctx.current_fix, 0, sizeof(gps_fix_t));
 
     ESP_LOGI(TAG, "GPS service initialised");
     return ESP_OK;
@@ -182,258 +455,37 @@ esp_err_t gps_service_init(void)
 esp_err_t gps_service_register_handlers(void)
 {
     esp_err_t ret;
-
-    ret = service_register_command(CMD_GPS_START, handle_gps_start, NULL);
+    ret = service_register_command(CMD_GPS_START, gps_start_wrapper, NULL);
     if (ret != ESP_OK) return ret;
-
-    ret = service_register_command(CMD_GPS_STOP, handle_gps_stop, NULL);
+    ret = service_register_command(CMD_GPS_STOP, gps_stop_wrapper, NULL);
     if (ret != ESP_OK) return ret;
-
-    ret = service_register_command(CMD_GPS_GET_LAST_FIX, handle_gps_get_last_fix, NULL);
+    ret = service_register_command(CMD_GPS_GET_LAST_FIX, gps_get_last_fix_wrapper, NULL);
     if (ret != ESP_OK) return ret;
-
+    ret = service_register_command(CMD_GPS_ADD_KNOWN_LOCATION, gps_add_known_location_wrapper, NULL);
+    if (ret != ESP_OK) return ret;
+    ret = service_register_command(CMD_GPS_SET_LOCATION_NAME, gps_set_location_name_wrapper, NULL);
+    if (ret != ESP_OK) return ret;
     ESP_LOGI(TAG, "GPS command handlers registered");
     return ESP_OK;
 }
 
 esp_err_t gps_service_start(void)
 {
+    /* Start the acquisition (default off) */
+    gps_msg_t msg = { .cmd = GPS_CMD_START };
+    if (xQueueSend(s_ctx.queue, &msg, 0) != pdTRUE) {
+        return ESP_FAIL;
+    }
     ESP_LOGI(TAG, "GPS service started");
     return ESP_OK;
 }
 
-/*============================================================================
- * Service task
- *============================================================================*/
-static void gps_service_task(void *pvParameters)
+esp_err_t gps_service_stop(void)
 {
-    (void)pvParameters;
-    internal_event_t ev;
-    char line[GPS_LINE_BUFFER_SIZE];
-    int line_len;
-
-    while (1) {
-        /* Check for commands with a short timeout (50 ms) */
-        if (xQueueReceive(s_ctx.queue, &ev, pdMS_TO_TICKS(50)) == pdTRUE) {
-            process_command(&ev);
-        }
-
-        /* If started, attempt to read a line from the driver (non-blocking) */
-        if (s_ctx.started) {
-            /* Use a short timeout to avoid blocking */
-            line_len = gps_driver_read_line(s_ctx.driver, line, sizeof(line), 0);
-            if (line_len > 0) {
-                ESP_LOGI(TAG, "Raw NMEA: %s", line);
-                parse_nmea_line(line, line_len);
-            }
-        }
-
-        /* Check for fix timeout */
-        uint64_t now = get_time_ms();
-        if (s_ctx.fix_valid && (now - s_ctx.last_update_ms > GPS_FIX_TIMEOUT_MS)) {
-            s_ctx.fix_valid = false;
-            ESP_LOGI(TAG, "GPS fix lost");
-            system_event_t ev = {
-                .id = EVENT_GPS_FIX_LOST,
-                .data = { { {0} } }   // zero payload /**<TODO: to be reviewed (this line) */
-            };
-            service_post_event(&ev);
-        }
+    gps_msg_t msg = { .cmd = GPS_CMD_STOP };
+    if (xQueueSend(s_ctx.queue, &msg, 0) != pdTRUE) {
+        return ESP_FAIL;
     }
-}
-
-static void process_command(const internal_event_t *ev)
-{
-    switch (ev->id) {
-        case INT_EVT_CMD_START:
-            if (!s_ctx.started) {
-                s_ctx.started = true;
-                ESP_LOGI(TAG, "GPS reading started");
-            }
-            break;
-
-        case INT_EVT_CMD_STOP:
-            if (s_ctx.started) {
-                s_ctx.started = false;
-                ESP_LOGI(TAG, "GPS reading stopped");
-            }
-            break;
-
-        case INT_EVT_CMD_GET_LAST_FIX:
-            if (s_ctx.fix_valid) {
-                system_event_t sys_ev = {
-                    .id = EVENT_GPS_FIX_UPDATED,
-                    .data = { .gps_fix = s_ctx.current_fix }
-                };
-                service_post_event(&sys_ev);
-            }
-            break;
-
-        default:
-            break;
-    }
-}
-
-/*============================================================================
- * NMEA Parsing Helpers
- *============================================================================*/
-
-static bool validate_checksum(const char *line)
-{
-    /* Format: $...*hh */
-    const char *star = strchr(line, '*');
-    if (!star) return false;
-    if (star - line < 3) return false;  /* too short */
-
-    uint8_t calc = 0;
-    for (const char *p = line + 1; p < star; p++) {
-        calc ^= *p;
-    }
-    uint8_t msg = (uint8_t)strtol(star + 1, NULL, 16);
-    return calc == msg;
-}
-
-static double parse_degrees(const char *str, char dir)
-{
-    /* Format: ddmm.mmmm or dddmm.mmmm */
-    char *end;
-    double val = strtod(str, &end);
-    int deg = (int)(val / 100);
-    double min = val - deg * 100;
-    double dec = deg + min / 60.0;
-    if (dir == 'S' || dir == 'W') {
-        dec = -dec;
-    }
-    return dec;
-}
-
-static void parse_gga(const char *line)
-{
-    /* $GPGGA,time,lat,N,lon,E,fix,sat,hdop,alt,M,sep,M,... */
-    char buf[128];
-    strlcpy(buf, line, sizeof(buf));
-    char *token = buf;
-    int field = 0;
-    char *lat_str = NULL, *lat_dir = NULL, *lon_str = NULL, *lon_dir = NULL;
-    char *fix_str = NULL, *sat_str = NULL, *hdop_str = NULL, *alt_str = NULL;
-
-    while ((token = strtok(token, ",")) != NULL) {
-        switch (field) {
-            case 2: lat_str = token; break;
-            case 3: lat_dir = token; break;
-            case 4: lon_str = token; break;
-            case 5: lon_dir = token; break;
-            case 6: fix_str = token; break;
-            case 7: sat_str = token; break;
-            case 8: hdop_str = token; break;
-            case 9: alt_str = token; break;
-            default: break;
-        }
-        field++;
-        token = NULL;
-    }
-
-    if (field < 15) return;  /* incomplete */
-
-    int fix = atoi(fix_str);
-    if (fix == 0) {
-        s_ctx.fix_valid = false;  /* no fix */
-        return;
-    }
-
-    if (lat_str && lat_dir && lon_str && lon_dir) {
-        double lat = parse_degrees(lat_str, lat_dir[0]);
-        double lon = parse_degrees(lon_str, lon_dir[0]);
-        s_ctx.current_fix.latitude = lat;
-        s_ctx.current_fix.longitude = lon;
-    }
-    if (sat_str) {
-        s_ctx.current_fix.satellites = atoi(sat_str);
-    }
-    if (hdop_str) {
-        s_ctx.current_fix.hdop = strtof(hdop_str, NULL);
-    }
-    if (alt_str) {
-        s_ctx.current_fix.altitude_m = strtof(alt_str, NULL);
-    }
-    s_ctx.current_fix.valid = true;
-    s_ctx.fix_valid = true;
-    s_ctx.last_update_ms = get_time_ms();
-
-    ESP_LOGI(TAG, "GGA parsed: lat=%.6f, lon=%.6f, alt=%.1f", s_ctx.current_fix.latitude, s_ctx.current_fix.longitude, s_ctx.current_fix.altitude_m);
-}
-
-static void parse_rmc(const char *line)
-{
-    /* $GPRMC,time,status,lat,N,lon,E,speed,course,date,... */
-    char buf[128];
-    strlcpy(buf, line, sizeof(buf));
-    char *token = buf;
-    int field = 0;
-    char *status = NULL;
-    char *lat_str = NULL, *lat_dir = NULL, *lon_str = NULL, *lon_dir = NULL;
-    char *speed_str = NULL;
-
-    while ((token = strtok(token, ",")) != NULL) {
-        switch (field) {
-            case 2: status = token; break;
-            case 3: lat_str = token; break;
-            case 4: lat_dir = token; break;
-            case 5: lon_str = token; break;
-            case 6: lon_dir = token; break;
-            case 7: speed_str = token; break;
-            default: break;
-        }
-        field++;
-        token = NULL;
-    }
-
-    if (field < 12) return;
-
-    if (status && status[0] != 'A') {
-        s_ctx.fix_valid = false;  /* not active */
-        return;
-    }
-
-    if (lat_str && lat_dir && lon_str && lon_dir) {
-        double lat = parse_degrees(lat_str, lat_dir[0]);
-        double lon = parse_degrees(lon_str, lon_dir[0]);
-        s_ctx.current_fix.latitude = lat;
-        s_ctx.current_fix.longitude = lon;
-    }
-    if (speed_str) {
-        float speed_knots = strtof(speed_str, NULL);
-        s_ctx.current_fix.speed_kmh = speed_knots * 1.852f;
-    }
-    s_ctx.current_fix.valid = true;
-    s_ctx.fix_valid = true;
-    s_ctx.last_update_ms = get_time_ms();
-}
-
-static void parse_nmea_line(const char *line, size_t len)
-{
-    (void)len;
-    if (line[0] != '$') return;
-    if (!validate_checksum(line)) return;
-
-    if (strncmp(line, "$GPGGA", 6) == 0) {
-        parse_gga(line);
-        /* Emit updated fix event */
-        system_event_t ev = {
-            .id = EVENT_GPS_FIX_UPDATED,
-            .data = { .gps_fix = s_ctx.current_fix }
-        };
-        service_post_event(&ev);
-    } else if (strncmp(line, "$GPRMC", 6) == 0) {
-        parse_rmc(line);
-        /* Also emit, but RMC may come less frequently; we can emit on GGA only */
-    }
-}
-
-/*============================================================================
- * Time helper (milliseconds since boot)
- *============================================================================*/
-static uint64_t get_time_ms(void)
-{
-    return (uint64_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "GPS service stopped");
+    return ESP_OK;
 }

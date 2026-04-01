@@ -278,6 +278,132 @@ static void prepare_led_off_blue(const system_context_t *ctx,
     p->led_id = 4;
 }
 
+
+/* ------------------------------------------------------------
+ * BUZZER PARAMETER PREPARERS
+ * ------------------------------------------------------------ */
+
+/* on power-up/booting... */
+static void prepare_buzzer_pattern_power_up(const system_context_t *ctx,
+                                            const system_event_t *event,
+                                            void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 12;   // power-up pattern
+}
+
+/* Person detected → friendly chirp (attention) */
+static void prepare_buzzer_pattern_attention(const system_context_t *ctx,
+                                             const system_event_t *event,
+                                             void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 4;   /* friendly chirp */
+}
+
+/* Intention confirmed → success arpeggio */
+static void prepare_buzzer_pattern_success(const system_context_t *ctx,
+                                           const system_event_t *event,
+                                           void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 5;   /* success arpeggio */
+}
+
+/* Lid closed → gentle fade */
+static void prepare_buzzer_gentle_fade(const system_context_t *ctx,
+                                       const system_event_t *event,
+                                       void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 6;   /* gentle fade */
+}
+
+/* Intent timeout/person left → gentle fade (same) */
+static void prepare_buzzer_gentle_fade_same(const system_context_t *ctx,
+                                            const system_event_t *event,
+                                            void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 6;
+}
+
+/* Near full → warning pulse */
+static void prepare_buzzer_warning_pulse(const system_context_t *ctx,
+                                         const system_event_t *event,
+                                         void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 7;   /* warning pulse */
+}
+
+/* Full → urgent alarm */
+static void prepare_buzzer_urgent_alarm(const system_context_t *ctx,
+                                        const system_event_t *event,
+                                        void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 8;   /* urgent alarm */
+}
+
+/* Escalation timeout → escalating siren */
+static void prepare_buzzer_escalating_siren(const system_context_t *ctx,
+                                            const system_event_t *event,
+                                            void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 9;   /* escalating siren */
+}
+
+/* Maintenance granted → calming chord */
+static void prepare_buzzer_calming_chord(const system_context_t *ctx,
+                                         const system_event_t *event,
+                                         void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 10;  /* calming chord */
+}
+
+/* Error → error glissando */
+static void prepare_buzzer_error_glissando(const system_context_t *ctx,
+                                           const system_event_t *event,
+                                           void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_pattern_params_t *p = params_out;
+    p->buzzer_id = 0;
+    p->pattern_id = 11;  /* error glissando */
+}
+
+/* buzzer off*/
+static void prepare_buzzer_off(const system_context_t *ctx,
+                               const system_event_t *event,
+                               void *params_out)
+{
+    (void)ctx; (void)event;
+    buzzer_off_params_t *p = params_out;
+    p->buzzer_id = 0;
+}
+
+
 /* ============================================================
  * TRANSITION CONDITION FUNCTIONS
  *
@@ -334,7 +460,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_START_PIR_MONITORING, NULL },  /* start PIR polling */
             { CMD_UPDATE_DISPLAY, NULL },
             { CMD_SEND_HEARTBEAT, NULL },
-            { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
+            { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_power_up }
         )
     },
 
@@ -349,7 +476,8 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_UPDATE_INDICATORS, NULL },                /* LED/buzzer attention */
             { CMD_SHOW_MESSAGE, NULL },                     /* "Raise waste to open" */
-            { CMD_LED_BLINK, prepare_led_blink_attention }  /* White LED (LED0) blink attention */
+            { CMD_LED_BLINK, prepare_led_blink_attention }, /* White LED (LED0) blink attention */
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_attention }
         )
     },
     /* ----------------------------------------------------------------------------------------
@@ -366,7 +494,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_UPDATE_INDICATORS, NULL },    /* success pattern */
             { CMD_LED_BLINK_STOP, NULL },   /* stop white LED blink (LED0) */
             { CMD_LED_ON, NULL },            /* turn green LED (LED1) on */
-            { CMD_LED_BLINK, prepare_led_blink_attention }
+            { CMD_LED_BLINK, prepare_led_blink_attention },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_success }
         )
     },
 
@@ -383,7 +512,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_START_INTENT_TIMER, prepare_intent_timer },
             { CMD_UPDATE_INDICATORS, NULL },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
-            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_green }
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_green },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_success }
         )
     },
 
@@ -403,7 +533,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_OFF, prepare_led_off_blue },
-            { CMD_LED_BLINK_STOP, prepare_led_off_white }
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade }
         )
     },
     {
@@ -419,7 +550,8 @@ static const state_transition_rule_t g_transition_table[] =
                 { CMD_LED_OFF, prepare_led_off_yellow },
                 { CMD_LED_OFF, prepare_led_off_red },
                 { CMD_LED_OFF, prepare_led_off_blue },
-                { CMD_LED_BLINK_STOP, prepare_led_off_white }
+                { CMD_LED_BLINK_STOP, prepare_led_off_white },
+                { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same }
             )
     },
     {
@@ -435,7 +567,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_OFF, prepare_led_off_blue },
-            { CMD_LED_BLINK_STOP, prepare_led_off_white }
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same }
         )
     },
 
@@ -450,7 +583,8 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_SEND_NOTIFICATION, prepare_near_full_notification },
             { CMD_UPDATE_DISPLAY, NULL },
-            { CMD_LED_BLINK, prepare_led_blink_slow }
+            { CMD_LED_BLINK, prepare_led_blink_slow },
+            { CMD_BUZZER_BEEP, prepare_buzzer_warning_pulse }
         )
     },
 
@@ -469,7 +603,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_UPDATE_INDICATORS, NULL },
             { CMD_START_ESCALATION_TIMER, prepare_escalation_timer },
             { CMD_LED_BLINK_STOP, prepare_led_off_yellow },               /* stop yellow blink */
-            { CMD_LED_BLINK, prepare_led_blink_fast }   /* start red fast blink */
+            { CMD_LED_BLINK, prepare_led_blink_fast },   /* start red fast blink */
+            { CMD_BUZZER_PATTERN, prepare_buzzer_urgent_alarm }
         )
     },
     
@@ -483,12 +618,13 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
             { CMD_UPDATE_DISPLAY, NULL },
-            { CMD_LED_BLINK_STOP, prepare_led_off_red },
-            { CMD_LED_OFF, prepare_led_off_red },
-            { CMD_LED_OFF, prepare_led_off_yellow },
-            { CMD_LED_OFF, prepare_led_off_white },
-            { CMD_LED_OFF, prepare_led_off_green },
-            { CMD_LED_OFF, prepare_led_off_blue }
+            { CMD_LED_BLINK_STOP,   prepare_led_off_red },
+            { CMD_LED_OFF,          prepare_led_off_red },
+            { CMD_LED_OFF,          prepare_led_off_yellow },
+            { CMD_LED_OFF,          prepare_led_off_white },
+            { CMD_LED_OFF,          prepare_led_off_green },
+            { CMD_LED_OFF,          prepare_led_off_blue },
+            { CMD_BUZZER_STOP,      prepare_buzzer_off  }
         )
     },
 
@@ -505,12 +641,13 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_SEND_NOTIFICATION, prepare_empty_notification },
             { CMD_UPDATE_DISPLAY, NULL },
             { CMD_STOP_ESCALATION_TIMER, NULL },
-            { CMD_LED_BLINK_STOP, prepare_led_off_red },
-            { CMD_LED_OFF, prepare_led_off_red },
-            { CMD_LED_OFF, prepare_led_off_yellow },
-            { CMD_LED_OFF, prepare_led_off_white },
-            { CMD_LED_OFF, prepare_led_off_green },
-            { CMD_LED_OFF, prepare_led_off_blue }
+            { CMD_LED_BLINK_STOP,   prepare_led_off_red },
+            { CMD_LED_OFF,          prepare_led_off_red },
+            { CMD_LED_OFF,          prepare_led_off_yellow },
+            { CMD_LED_OFF,          prepare_led_off_white },
+            { CMD_LED_OFF,          prepare_led_off_green },
+            { CMD_LED_OFF,          prepare_led_off_blue },
+            { CMD_BUZZER_STOP,      prepare_buzzer_off  }
         )
     },
 
@@ -523,7 +660,8 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_FULL,
         .command_batch = COMMAND_BATCH(
-            { CMD_SEND_ESCALATION_NOTIFICATION, NULL }
+            { CMD_SEND_ESCALATION_NOTIFICATION, NULL },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_escalating_siren }
         )
     },
 
@@ -544,7 +682,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
-            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord }
         )
     },
     {
@@ -561,7 +700,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
-            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue }
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord }
         )
     },
 
@@ -597,7 +737,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
             { CMD_LED_BLINK_STOP, prepare_led_off_red },
             { CMD_LED_BLINK_STOP, prepare_led_off_blue },
-            { CMD_LED_BLINK, prepare_led_blink_fast }
+            { CMD_LED_BLINK, prepare_led_blink_fast },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando }
         )
     },
     {
@@ -612,7 +753,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
             { CMD_LED_BLINK_STOP, prepare_led_off_red },
             { CMD_LED_BLINK_STOP, prepare_led_off_blue },
-            { CMD_LED_BLINK, prepare_led_blink_fast }
+            { CMD_LED_BLINK, prepare_led_blink_fast },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando }
         )
     },
 

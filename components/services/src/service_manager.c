@@ -16,6 +16,7 @@
 #include "timer_service.h"
 #include "indicator_service.h"
 #include "led_service.h"
+#include "buzzer_service.h"
 #include "gsm_service.h"
 #include "gps_service.h"
 #include "pir_service.h"
@@ -63,6 +64,12 @@ static const service_entry_t s_services[] = {
         .init = led_service_init,
         .register_handlers = led_service_register_handlers,
         .start = led_service_start
+    },
+        {
+        .name = "buzzer",
+        .init = buzzer_service_init,
+        .register_handlers = buzzer_service_register_handlers,
+        .start = buzzer_service_start
     },
     {
         .name = "gps",

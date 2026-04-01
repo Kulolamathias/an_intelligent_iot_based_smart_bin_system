@@ -1,31 +1,15 @@
 /**
- * @file gps_driver.h
- * @brief GPS UART Driver – Low‑level NMEA Sentence Reader
+ * @file components/drivers/sensors/gps_driver/gps_driver.h
+ * @brief GPS Driver – hardware abstraction for NMEA‑0183 compatible GPS modules (NEO‑6M, NEO‑7M, NEO‑8M).
  *
  * =============================================================================
  * ARCHITECTURAL ROLE
  * =============================================================================
- * This driver encapsulates the ESP‑IDF UART driver for a GPS module.
- * It provides a simple interface to read complete NMEA sentences.
- * No parsing, no business logic.
+ * This driver provides a handle‑based interface to a GPS module connected via UART.
+ * It reads raw NMEA sentences, parses selected sentences ($GPGGA, $GPRMC),
+ * and provides structured data (position, time, fix quality, satellites, etc.).
  *
- * =============================================================================
- * OWNERSHIP
- * =============================================================================
- * - Defines: driver handle and public API.
- * - Does NOT: maintain any persistent state outside its own static context.
- *
- * =============================================================================
- * INVARIANTS
- * =============================================================================
- * - All public functions validate arguments.
- * - The driver uses static instance pool; no dynamic allocation.
- * - read_line() blocks until a full line is received or timeout expires.
- *
- * =============================================================================
- * @version 1.0.0
- * @date 2026-03-01
- * @author System Architecture Team
+ * It contains NO business logic, NO command handling, and NO event posting.
  * =============================================================================
  */
 
@@ -33,83 +17,103 @@
 #define GPS_DRIVER_H
 
 #include "esp_err.h"
+#include "driver/uart.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** Maximum number of GPS driver instances (static pool) */
-#define GPS_DRIVER_MAX_INSTANCES 1
-
-/** Opaque handle type for a GPS driver instance */
-typedef int gps_driver_handle_t;
-
-/** Invalid handle value */
-#define GPS_DRIVER_HANDLE_INVALID (-1)
+/** Opaque handle representing a GPS instance. */
+typedef struct gps_handle_t *gps_handle_t;
 
 /**
- * @brief Create and initialize a GPS driver instance.
+ * @brief GPS data structure (parsed from NMEA sentences).
+ */
+typedef struct {
+    bool fix_valid;             /**< true if fix is usable (3D fix) */
+    bool time_valid;            /**< true if time/date is valid */
+    double latitude;            /**< decimal degrees, positive north */
+    double longitude;           /**< decimal degrees, positive east */
+    float altitude_m;           /**< altitude above mean sea level (meters) */
+    float speed_kmh;            /**< ground speed in km/h */
+    float course_deg;           /**< course over ground (degrees) */
+    uint8_t satellites;         /**< number of satellites used */
+    float hdop;                 /**< horizontal dilution of precision */
+    uint32_t timestamp_ms;      /**< system time when fix was obtained (ms) */
+    /* Time from NMEA (UTC) */
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+} gps_data_t;
+
+/**
+ * @brief GPS module configuration.
+ */
+typedef struct {
+    uart_port_t uart_num;       /**< UART port (UART_NUM_0, UART_NUM_1, UART_NUM_2) */
+    gpio_num_t tx_pin;          /**< UART TX pin (connect to GPS RX) */
+    gpio_num_t rx_pin;          /**< UART RX pin (connect to GPS TX) */
+    uint32_t baud_rate;         /**< Baud rate (default for NEO‑6M is 9600) */
+    uint32_t rx_buffer_size;    /**< Size of UART RX buffer (bytes) */
+} gps_config_t;
+
+/**
+ * @brief Create a GPS instance.
  *
- * Configures and installs the UART driver for the given pins.
- * Uses static instance pool; no dynamic allocation.
- *
- * @param uart_num  UART port number (e.g., UART_NUM_1)
- * @param baud_rate Baud rate (usually 9600)
- * @param tx_pin    GPIO pin for TX (or -1 if not used)
- * @param rx_pin    GPIO pin for RX
- * @param[out] handle Pointer to receive the driver handle.
+ * @param cfg   Configuration (UART, pins, baud rate).
+ * @param out_handle Pointer to store the created handle.
  * @return ESP_OK on success, error code otherwise.
  */
-esp_err_t gps_driver_create(int uart_num, int baud_rate, int tx_pin, int rx_pin,
-                            gps_driver_handle_t *handle);
+esp_err_t gps_driver_create(const gps_config_t *cfg, gps_handle_t *out_handle);
 
 /**
- * @brief Start the GPS driver (enables UART reception).
+ * @brief Start GPS module (enable NMEA output, clear buffers).
  *
- * After this call, the UART is ready to receive data.
- *
- * @param handle Driver handle.
+ * @param handle GPS instance handle.
  * @return ESP_OK on success, error code otherwise.
  */
-esp_err_t gps_driver_start(gps_driver_handle_t handle);
+esp_err_t gps_driver_start(gps_handle_t handle);
 
 /**
- * @brief Stop the GPS driver (disables UART reception).
+ * @brief Read and parse available data from GPS (non‑blocking).
  *
- * @param handle Driver handle.
+ * This function reads from the UART buffer and parses NMEA sentences
+ * as they become available. It updates the internal data structure.
+ *
+ * @param handle GPS instance handle.
+ * @return ESP_OK if at least one sentence was parsed, ESP_ERR_TIMEOUT if nothing read.
+ */
+esp_err_t gps_driver_update(gps_handle_t handle);
+
+/**
+ * @brief Get the latest parsed GPS data.
+ *
+ * @param handle GPS instance handle.
+ * @param[out] data Pointer to store the data.
  * @return ESP_OK on success, error code otherwise.
  */
-esp_err_t gps_driver_stop(gps_driver_handle_t handle);
+esp_err_t gps_driver_get_data(gps_handle_t handle, gps_data_t *data);
 
 /**
- * @brief Read a complete NMEA line (terminated by '\n').
+ * @brief Stop GPS module (disable NMEA output, but keep UART).
  *
- * Blocks until a line is received or timeout expires.
- * The line is null‑terminated and does not include the '\n'.
- *
- * @param handle    Driver handle.
- * @param buffer    Output buffer to store the line.
- * @param max_len   Maximum buffer size (including null terminator).
- * @param timeout_ms Timeout in milliseconds.
- * @return Number of bytes read (excluding null) on success,
- *         -1 on timeout, -2 on error.
+ * @param handle GPS instance handle.
+ * @return ESP_OK on success.
  */
-int gps_driver_read_line(gps_driver_handle_t handle,
-                         char *buffer, size_t max_len,
-                         uint32_t timeout_ms);
+esp_err_t gps_driver_stop(gps_handle_t handle);
 
 /**
- * @brief Delete a GPS driver instance and free resources.
+ * @brief Delete a GPS instance and free resources.
  *
- * Uninstalls the UART driver and releases the instance slot.
- *
- * @param handle Driver handle.
- * @return ESP_OK on success, error code otherwise.
+ * @param handle GPS instance handle.
+ * @return ESP_OK on success.
  */
-esp_err_t gps_driver_delete(gps_driver_handle_t handle);
+esp_err_t gps_driver_delete(gps_handle_t handle);
 
 #ifdef __cplusplus
 }

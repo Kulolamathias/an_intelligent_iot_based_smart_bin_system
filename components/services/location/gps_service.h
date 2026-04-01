@@ -1,31 +1,44 @@
 /**
- * @file gps_service.h
- * @brief GPS Service – NMEA Parsing and Fix Management
+ * @file components/services/location/gps_service/gps_service.h
+ * @brief GPS Service – acquires location data and enriches it with human‑readable names.
  *
  * =============================================================================
  * ARCHITECTURAL ROLE
  * =============================================================================
- * This service owns the GPS receiver. It reads NMEA sentences from the driver,
- * parses relevant messages ($GPGGA, $GPRMC), maintains a current fix,
- * and emits events when the fix changes or is lost.
+ * This service owns the GPS driver and provides a command interface to start/stop
+ * GPS acquisition, retrieve location data, and maintain a mapping of coordinates
+ * to human‑readable place names. It emits enriched location events to the core.
  *
  * =============================================================================
- * OWNERSHIP
+ * DESIGN PRINCIPLES
  * =============================================================================
- * - Defines: public API for the service manager (init, register_handlers, start).
- * - Does NOT: directly access UART; uses the GPS driver.
+ * - Handles raw GPS data (lat, lon, altitude, etc.) from the driver.
+ * - Enriches data with a place name using:
+ *   1. Local mapping table (pre‑registered coordinate areas)
+ *   2. (Future) External reverse geocoding API via MQTT/HTTP
+ * - Allows dynamic addition of known locations via commands.
+ * - Designed for extensibility: mapping table can be stored in NVS, names can be
+ *   updated remotely, and external geocoding can be integrated later.
  *
  * =============================================================================
- * DEPENDENCIES
+ * COMMANDS HANDLED
  * =============================================================================
- * - gps_driver (low‑level UART)
- * - service_interfaces (command registration, event posting)
+ * - CMD_GPS_START               – power on GPS and begin reading
+ * - CMD_GPS_STOP                – power off GPS
+ * - CMD_GPS_GET_LAST_FIX        – retrieve most recent location data (immediate)
+ * - CMD_GPS_SET_LOCATION_NAME   – assign a name to the current location
+ * - CMD_GPS_ADD_KNOWN_LOCATION  – add/update a mapping of coordinates to a name
  *
  * =============================================================================
- * @version 1.0.0
- * @date 2026-03-01
- * @author System Architecture Team
+ * EVENTS POSTED
  * =============================================================================
+ * - EVENT_GPS_FIX_UPDATED       – new location fix available (with coordinates + name)
+ * - EVENT_GPS_FIX_LOST          – GPS fix lost
+ * - EVENT_GPS_LOCATION_NAMED    – when a name is assigned to the current location
+ *
+ * =============================================================================
+ * @author matthithyahu
+ * @date 2026-04-01
  */
 
 #ifndef GPS_SERVICE_H
@@ -38,9 +51,10 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize the GPS service.
+ * @brief Initialise the GPS service.
  *
- * Creates the internal queue, task, and initializes the GPS driver.
+ * Creates the internal task, queue, and initialises the GPS driver.
+ * Also loads the known location table from NVS (if available).
  *
  * @return ESP_OK on success, error code otherwise.
  */
@@ -49,8 +63,6 @@ esp_err_t gps_service_init(void);
 /**
  * @brief Register GPS service command handlers with the command router.
  *
- * Handles CMD_GPS_START, CMD_GPS_STOP, CMD_GPS_GET_LAST_FIX.
- *
  * @return ESP_OK on success, error code otherwise.
  */
 esp_err_t gps_service_register_handlers(void);
@@ -58,11 +70,27 @@ esp_err_t gps_service_register_handlers(void);
 /**
  * @brief Start the GPS service.
  *
- * This function does nothing; the service waits for commands.
+ * Powers on the GPS module and begins periodic reading (in the service task).
  *
- * @return ESP_OK always.
+ * @return ESP_OK on success, error code otherwise.
  */
 esp_err_t gps_service_start(void);
+
+/**
+ * @brief Stop the GPS service.
+ *
+ * Powers off the GPS module and stops the reading task.
+ *
+ * @return ESP_OK on success.
+ */
+esp_err_t gps_service_stop(void);
+
+/**
+ * @brief Get the latest GPS fix (for internal use by other services).
+ * @param[out] data Pointer to store the data.
+ * @return true if fix is valid, false otherwise.
+ */
+bool gps_service_get_last_fix(gps_data_t *data);
 
 #ifdef __cplusplus
 }

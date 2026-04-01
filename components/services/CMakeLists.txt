@@ -23,6 +23,7 @@ idf_component_register(
         "sensing/ultrasonic/ultrasonic_service.c"
 
         "actuation/led/led_service.c"
+        "actuation/buzzer/buzzer_service.c"
         "actuation/servo/servo_service.c"
 
         "example/example_service.c"
@@ -42,6 +43,7 @@ idf_component_register(
 
         "actuation"
         "actuation/led"
+        "actuation/buzzer"
         "actuation/servo"
 
         "connectivity"

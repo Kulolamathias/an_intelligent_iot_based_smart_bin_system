@@ -58,6 +58,23 @@ typedef struct {
     char message[161];
 } cmd_send_sms_params_t;
 
+/* */
+
+/* ---------------------------------------------------------
+ * GPS command parameters 
+ * --------------------------------------------------------- */
+typedef struct {
+    double latitude;            /**< Latitude in degrees */
+    double longitude;           /**< Longitude in degrees */
+    uint16_t radius_meters;     /**< Matching radius (meters) */
+    char name[64];              /**< Location name */
+} gps_add_location_params_t;
+
+typedef struct {
+    char name[64];              /**< Name to assign to current location */
+} gps_set_name_params_t;
+
+
 /* ------------------------------------------------------------
  * CMD_SHOW_MESSAGE (LCD display)
  * ------------------------------------------------------------ */
@@ -65,6 +82,7 @@ typedef struct {
     char line1[20];            /**< First display line */
     char line2[20];            /**< Second display line */
 } cmd_show_message_params_t;
+
 
 /* ------------------------------------------------------------
  * CMD_UPDATE_INDICATORS (LEDs, buzzer)
@@ -75,6 +93,7 @@ typedef struct {
     uint8_t lcd_pattern;       /**< LCD backlight blink pattern (same encoding) */
 } cmd_update_indicators_params_t;
 
+
 /* ------------------------------------------------------------
  * CMD_SEND_STATUS_UPDATE (MQTT report)
  * ------------------------------------------------------------ */
@@ -84,19 +103,27 @@ typedef struct {
     bool bin_locked;                 /**< Lock state */
 } cmd_send_status_update_params_t;
 
-/* ============================================================
+
+/* ------------------------------------------------------------
  * Timer start commands – all share the same parameter struct
- * ============================================================ */
+ * ------------------------------------------------------------ */
 typedef struct {
     uint32_t timeout_ms;          /**< Timer duration in milliseconds */
 } cmd_start_timer_params_t;
 
-/* Servo command parameters */
+
+/* ------------------------------------------------------------
+ * Servo commands (CMD_SERVO_SET_ANGLE, CMD_SERVO_OPEN_LID, CMD_SERVO_CLOSE_LID)
+ * ------------------------------------------------------------ */
 typedef struct {
     servo_id_t servo_id;
     float angle_deg;          /* used by CMD_SERVO_SET_ANGLE, CMD_SERVO_OPEN/CLOSE also may use it */
 } servo_command_data_t;
 
+
+/* ------------------------------------------------------------
+ * WiFi command parameters
+ * ------------------------------------------------------------ */
 typedef struct {
     char ssid[32];
     char password[64];
@@ -108,6 +135,7 @@ typedef struct {
     uint32_t max_retry_delay_ms;
     uint32_t max_retry_attempts;
 } cmd_set_config_wifi_params_t;
+
 
 /* ------------------------------------------------------------
  * MQTT command parameters
@@ -181,7 +209,16 @@ typedef struct {
     uint8_t sensor_id;  /* 0 = fill, 1 = intent */
 } cmd_read_sensor_params_t;
 
-/* LED command parameters */
+/* For CMD_MQTT_SET_WIFI_STATE, we can use the generic status_value field.
+ * No new struct needed, but we need a way to pass a boolean. The command
+ * router passes a void*; we can cast a uint32_t. For clarity, define:
+ */
+typedef uint32_t cmd_wifi_state_t;  /* 0 = disconnected, 1 = connected */
+
+
+/* ------------------------------------------------------------
+ * LED command parameters
+ * ------------------------------------------------------------ */
 typedef struct {
     uint8_t led_id;         /**< LED index (0..LED_COUNT-1) */
 } led_id_params_t;
@@ -204,11 +241,31 @@ typedef struct {
 } led_fade_params_t;
 
 
-/* For CMD_MQTT_SET_WIFI_STATE, we can use the generic status_value field.
- * No new struct needed, but we need a way to pass a boolean. The command
- * router passes a void*; we can cast a uint32_t. For clarity, define:
- */
-typedef uint32_t cmd_wifi_state_t;  /* 0 = disconnected, 1 = connected */
+/* ------------------------------------------------------------
+ * Buzzer command parameters
+ * ------------------------------------------------------------ */
+typedef struct {
+    uint8_t buzzer_id;          /**< Buzzer instance ID (0..N-1) */
+    uint32_t frequency_hz;      /**< Sound frequency in Hz */
+    uint8_t duty_percent;       /**< Duty cycle (0‑100), usually 50 for square wave */
+} buzzer_on_params_t;
+
+typedef struct {
+    uint8_t buzzer_id;          /**< Buzzer instance ID */
+} buzzer_off_params_t;
+
+typedef struct {
+    uint8_t buzzer_id;          /**< Buzzer instance ID */
+    uint32_t duration_ms;       /**< Beep duration in milliseconds */
+    uint32_t frequency_hz;      /**< Sound frequency */
+    uint8_t duty_percent;       /**< Duty cycle */
+} buzzer_beep_params_t;
+
+typedef struct {
+    uint8_t buzzer_id;          /**< Buzzer instance ID */
+    uint8_t pattern_id;         /**< Predefined pattern ID (0 = attention, 1 = success, 2 = error, etc.) */
+} buzzer_pattern_params_t;
+
 
 /* ============================================================
  * UNION OF ALL PARAMETER STRUCTURES
@@ -237,6 +294,12 @@ typedef union {
     led_brightness_params_t           led_brightness;
     led_blink_params_t                led_blink;
     led_fade_params_t                 led_fade;
+    buzzer_on_params_t                buzzer_on;
+    buzzer_off_params_t               buzzer_off;
+    buzzer_beep_params_t              buzzer_beep;
+    buzzer_pattern_params_t           buzzer_pattern;
+    gps_add_location_params_t         gps_add_location;
+    gps_set_name_params_t             gps_set_name;
 } command_param_union_t;
 
 #ifdef __cplusplus

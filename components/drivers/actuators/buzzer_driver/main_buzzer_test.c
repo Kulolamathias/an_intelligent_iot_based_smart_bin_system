@@ -1,160 +1,6 @@
 #if 1
 
 
-
-/**
- * @file main.c
- * @brief Test entry – runs selected tests with full service initialisation.
- *
- * =============================================================================
- * ARCHITECTURAL ROLE
- * =============================================================================
- * This main file initialises the core, services, network stack, and NVS,
- * then runs a test suite. It follows the same pattern as the rocket project,
- * ensuring deterministic startup order.
- *
- * =============================================================================
- * LIFECYCLE
- * =============================================================================
- * 1. command_router_init()
- * 2. event_dispatcher_init()   (only creates queue, no task yet)
- * 3. nvs_flash_init()
- * 4. esp_netif_init() + esp_event_loop_create_default()
- * 5. service_manager_init_all()
- * 6. service_manager_register_all()
- * 7. command_router_lock()      <-- added
- * 8. service_manager_start_all()
- * 9. event_dispatcher_start()   (now dispatcher task is safe)
- * 10. Run tests
- * 11. Idle loop
- *
- * =============================================================================
- * @author matthithyahu
- * @date 2026-03-29
- */
-
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "esp_event.h"
-#include "esp_netif.h"
-
-#include "command_router.h"
-#include "event_dispatcher.h"
-#include "service_manager.h"
-
-#include "mqtt_topic.h"
-
-/* Test headers */
-#include "ultrasonic_test.h"
-#include "wifi_mqtt_test.h"
-
-static const char *TAG = "MAIN";
-
-static struct {
-    const char *name;
-    esp_err_t (*run)(void);
-} s_tests[] = {
-    // { "ultrasonic",  ultrasonic_test_run },
-    // { "wifi_mqtt",   wifi_mqtt_test_run  },
-};
-
-#define TEST_COUNT (sizeof(s_tests) / sizeof(s_tests[0]))
-
-void app_main(void)
-{
-    esp_err_t ret;
-
-    /* 1. Core initialisation (only registry, no tasks) */
-    command_router_init();
-
-    ret = event_dispatcher_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "event_dispatcher_init failed: %d", ret);
-        return;
-    }
-
-    /* 2. NVS initialisation (required for WiFi) */
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    /* 3. TCP/IP stack and default event loop */
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    /* 4. Service lifecycle: init → register → start */
-    ret = service_manager_init_all();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "service_manager_init_all failed: %d", ret);
-        return;
-    }
-
-    ret = service_manager_register_all();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "service_manager_register_all failed: %d", ret);
-        return;
-    }
-
-    /* Lock the command router – after this no more handlers can be registered */
-    command_router_lock();
-    vTaskDelay(pdMS_TO_TICKS(50));  /* brief delay to ensure all handlers are registered before starting services */
-
-    /* 5. Start event dispatcher (task now created) */
-    ret = event_dispatcher_start();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "event_dispatcher_start failed: %d", ret);
-        return;
-    }
-
-    ret = service_manager_start_all();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "service_manager_start_all failed: %d", ret);
-        return;
-    }
-
-    /* Let system settle */
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    ESP_LOGI(TAG, "System ready. Running tests...");
-
-    /* 6. Run all tests sequentially */
-    for (size_t i = 0; i < TEST_COUNT; i++) {
-        ESP_LOGI(TAG, "=== Running test: %s ===", s_tests[i].name);
-        ret = s_tests[i].run();
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Test %s failed: %d", s_tests[i].name, ret);
-        } else {
-            ESP_LOGI(TAG, "Test %s passed.", s_tests[i].name);
-        }
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-
-    ESP_LOGI(TAG, "All tests completed. System idling.");
-
-    /* 7. Idle loop – keep the system alive */
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
-
-
-
-
-
-
-
-
-#else
-
-
-
 /**
  * @file buzzer_demo.c
  * @brief Comprehensive buzzer driver demonstration.
@@ -636,6 +482,252 @@ void app_main(void)
 
 
 
+
+// /**
+//  * @file test_buzzer.c
+//  * @brief Standalone test for buzzer driver (PWM using LEDC).
+//  */
+
+// #include "freertos/FreeRTOS.h"
+// #include "freertos/task.h"
+// #include "esp_log.h"
+// #include "buzzer_driver.h"
+
+// static const char *TAG = "BUZZER_TEST";
+
+// void app_main(void)
+// {
+//     ESP_LOGI(TAG, "Starting buzzer test");
+
+//     /* Configure buzzer on GPIO23 */
+//     buzzer_config_t cfg = {
+//         .gpio_num = GPIO_NUM_23,
+//         .channel = LEDC_CHANNEL_0,
+//         .timer = LEDC_TIMER_0,
+//         .default_freq_hz = 2000,
+//         .default_duty_percent = 50
+//     };
+
+//     buzzer_handle_t buzzer;
+//     esp_err_t ret = buzzer_driver_create(&cfg, &buzzer);
+//     if (ret != ESP_OK) {
+//         ESP_LOGE(TAG, "Failed to create buzzer: %d", ret);
+//         return;
+//     }
+
+//     /* Test 1: Continuous 2 kHz tone for 1 second */
+//     ESP_LOGI(TAG, "Playing 2 kHz tone for 1 second...");
+//     buzzer_driver_start_tone(buzzer, 2000, 50);
+//     vTaskDelay(pdMS_TO_TICKS(1000));
+//     buzzer_driver_stop(buzzer);
+
+//     /* Test 2: Three short beeps at 1 kHz */
+//     ESP_LOGI(TAG, "Three short beeps...");
+//     for (int i = 0; i < 3; i++) {
+//         buzzer_driver_start_tone(buzzer, 1000, 50);
+//         vTaskDelay(pdMS_TO_TICKS(200));
+//         buzzer_driver_stop(buzzer);
+//         vTaskDelay(pdMS_TO_TICKS(100));
+//     }
+
+//     /* Test 3: Sweep frequency from 500 Hz to 5 kHz over 2 seconds */
+//     ESP_LOGI(TAG, "Frequency sweep 500 Hz → 5000 Hz...");
+//     for (uint32_t freq = 500; freq <= 5000; freq += 100) {
+//         buzzer_driver_start_tone(buzzer, freq, 50);
+//         vTaskDelay(pdMS_TO_TICKS(20));
+//     }
+//     buzzer_driver_stop(buzzer);
+
+//     ESP_LOGI(TAG, "Test finished, deleting buzzer...");
+//     vTaskDelay(pdMS_TO_TICKS(1000));
+//     buzzer_driver_delete(buzzer);
+//     ESP_LOGI(TAG, "Done.");
+// }
+
+
+
+
+
+
+#else 
+
+
+/**
+ * @file buzzer_demo.c
+ * @brief Comprehensive buzzer demonstration using the buzzer driver.
+ *
+ * =============================================================================
+ * PURPOSE
+ * =============================================================================
+ * This demo tests all features of the buzzer driver and optionally the
+ * buzzer service. It serves as a reference for integrating buzzers into any
+ * project that uses the driver.
+ *
+ * =============================================================================
+ * FEATURES DEMONSTRATED
+ * =============================================================================
+ * - Continuous tone (on/off)
+ * - Single beep with adjustable frequency and duration
+ * - Predefined patterns (attention, success, error, full)
+ * - Frequency sweep
+ * - Multiple patterns chained
+ * - Using buzzer service commands (optional)
+ *
+ * =============================================================================
+ * @author matthithyahu
+ * @date 2026-04-01
+ * =============================================================================
+ */
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "buzzer_driver.h"
+#include "command_router.h"   // only if using service commands
+#include "service_interfaces.h" // only if using service
+
+static const char *TAG = "BUZZER_DEMO";
+
+/* ============================================================
+ * Helper: short delay between tests
+ * ============================================================ */
+static void wait(uint32_t ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+/* ============================================================
+ * Test using only the driver (no core/service)
+ * ============================================================ */
+static void test_driver_only(buzzer_handle_t buzzer)
+{
+    ESP_LOGI(TAG, "=== Driver-only tests ===");
+
+    /* 1. Continuous tone for 1 second at 2 kHz */
+    ESP_LOGI(TAG, "1. Continuous 2 kHz tone, 1 sec");
+    buzzer_driver_start_tone(buzzer, 2000, 50);
+    wait(1000);
+    buzzer_driver_stop(buzzer);
+    wait(500);
+
+    /* 2. Single beep: 1 kHz, 300 ms */
+    ESP_LOGI(TAG, "2. Single beep: 1 kHz, 300 ms");
+    buzzer_driver_start_tone(buzzer, 1000, 50);
+    wait(300);
+    buzzer_driver_stop(buzzer);
+    wait(500);
+
+    /* 3. Three short beeps (like a doorbell) */
+    ESP_LOGI(TAG, "3. Three short beeps (2 kHz, 200 ms, 100 ms pause)");
+    for (int i = 0; i < 3; i++) {
+        buzzer_driver_start_tone(buzzer, 2000, 50);
+        wait(200);
+        buzzer_driver_stop(buzzer);
+        wait(100);
+    }
+    wait(500);
+
+    /* 4. Frequency sweep from 500 Hz to 5 kHz over 2 seconds */
+    ESP_LOGI(TAG, "4. Frequency sweep 500 Hz → 5000 Hz (2 sec)");
+    for (uint32_t freq = 500; freq <= 5000; freq += 100) {
+        buzzer_driver_start_tone(buzzer, freq, 50);
+        wait(20);
+    }
+    buzzer_driver_stop(buzzer);
+    wait(1000);
+}
+
+/* ============================================================
+ * Test using service commands (if core and service are present)
+ * ============================================================ */
+static void test_service_commands(void)
+{
+    ESP_LOGI(TAG, "=== Service-based tests ===");
+    ESP_LOGI(TAG, "Note: These require core and buzzer service to be running.");
+    ESP_LOGI(TAG, "If not, you will see command router errors – ignore if not using service.");
+
+    /* Prepare command parameters */
+    command_param_union_t params;
+
+    /* 1. Continuous 2 kHz tone */
+    buzzer_on_params_t on = { .buzzer_id = 0, .frequency_hz = 2000, .duty_percent = 50 };
+    memcpy(&params.buzzer_on, &on, sizeof(on));
+    command_router_execute(CMD_BUZZER_ON, &params);
+    wait(1000);
+    command_router_execute(CMD_BUZZER_OFF, &params);
+    wait(500);
+
+    /* 2. Single beep: 1 kHz, 300 ms */
+    buzzer_beep_params_t beep = { .buzzer_id = 0, .frequency_hz = 1000, .duty_percent = 50, .duration_ms = 300 };
+    memcpy(&params.buzzer_beep, &beep, sizeof(beep));
+    command_router_execute(CMD_BUZZER_BEEP, &params);
+    wait(1000);
+
+    /* 3. Attention pattern (3 short beeps) */
+    buzzer_pattern_params_t pattern = { .buzzer_id = 0, .pattern_id = 0 };
+    memcpy(&params.buzzer_pattern, &pattern, sizeof(pattern));
+    command_router_execute(CMD_BUZZER_PATTERN, &params);
+    wait(2000);
+
+    /* 4. Success pattern (one short high beep) */
+    pattern.pattern_id = 1;
+    memcpy(&params.buzzer_pattern, &pattern, sizeof(pattern));
+    command_router_execute(CMD_BUZZER_PATTERN, &params);
+    wait(1000);
+
+    /* 5. Error pattern (long low beep) */
+    pattern.pattern_id = 2;
+    memcpy(&params.buzzer_pattern, &pattern, sizeof(pattern));
+    command_router_execute(CMD_BUZZER_PATTERN, &params);
+    wait(2000);
+}
+
+/* ============================================================
+ * Main entry point
+ * ============================================================ */
+void app_main(void)
+{
+    ESP_LOGI(TAG, "=== Buzzer Demonstration Started ===");
+
+    /* ============================================================
+     * Create buzzer instance (GPIO 23, channel 0, timer 0)
+     * ============================================================ */
+    buzzer_config_t cfg = {
+        .gpio_num = GPIO_NUM_23,
+        .channel = LEDC_CHANNEL_0,
+        .timer = LEDC_TIMER_0,
+        .default_freq_hz = 2000,
+        .default_duty_percent = 50
+    };
+    buzzer_handle_t buzzer;
+    esp_err_t ret = buzzer_driver_create(&cfg, &buzzer);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create buzzer: %d", ret);
+        return;
+    }
+
+    /* ============================================================
+     * Run driver tests
+     * ============================================================ */
+    test_driver_only(buzzer);
+
+    /* ============================================================
+     * Optional: run service tests (if core is initialised)
+     * We skip this if the core is not running (i.e., in this standalone demo,
+     * command_router_init was not called). To avoid errors, we'll only run
+     * service tests if we detect that command_router is initialised.
+     * You can comment out the if block if you want to test service commands.
+     * ============================================================ */
+    // Uncomment if you have initialised the core elsewhere.
+    // test_service_commands();
+
+    /* ============================================================
+     * Clean up
+     * ============================================================ */
+    ESP_LOGI(TAG, "Demo finished. Deleting buzzer...");
+    buzzer_driver_delete(buzzer);
+    ESP_LOGI(TAG, "Done.");
+}
 
 
 #endif

@@ -112,9 +112,14 @@ typedef enum {
     CMD_SET_GSM_PASSWORD,       /**< Set GSM password (params: string) – optional */
     CMD_SET_AUTHORIZED_NUMBERS, /**< Set authorized numbers (params: array) – optional */
 
-    CMD_GPS_START,              /**< Power on GPS module and begin fix acquisition */
-    CMD_GPS_STOP,               /**< Power down GPS module */
+    /* -----------------------------------------------------
+     * GPS commands
+     * ----------------------------------------------------- */
+    CMD_GPS_START,              /**< Power on GPS and begin reading */
+    CMD_GPS_STOP,               /**< Power off GPS */
     CMD_GPS_GET_LAST_FIX,       /**< Retrieve most recent GPS coordinates */
+    CMD_GPS_ADD_KNOWN_LOCATION, /**< Add/update a known location mapping */
+    CMD_GPS_SET_LOCATION_NAME,  /**< Assign a name to the current location */
 
     CMD_BIN_NET_NOTIFY_MQTT_CONNECTED,  /**< Inform neighbor bins of MQTT connection */
     CMD_BIN_NET_NOTIFY_NETWORK_MESSAGE, /**< Notify neighbor bins of network message */
@@ -148,6 +153,15 @@ typedef enum {
     CMD_LED_BLINK,              /**< Start blinking (params: led_blink_params_t) */
     CMD_LED_BLINK_STOP,         /**< Stop blinking */
     CMD_LED_FADE,               /**< Smooth fade (params: led_fade_params_t) */
+
+    /* --------------------------------------------------------
+     * Buzzer commands
+     * -------------------------------------------------------- */
+    CMD_BUZZER_ON,              /**< Start continuous sound (params: buzzer_on_params_t) */
+    CMD_BUZZER_OFF,             /**< Stop sound (params: buzzer_off_params_t) */
+    CMD_BUZZER_BEEP,            /**< Single beep (params: buzzer_beep_params_t) */
+    CMD_BUZZER_PATTERN,         /**< Play a predefined pattern (params: buzzer_pattern_params_t) */
+    CMD_BUZZER_STOP,            /**< Stop any ongoing pattern */
 
     /* --------------------------------------------------------
      * Timer commands – software timer management

@@ -20,8 +20,8 @@ idf_component_register(
 
         "actuators/led_driver"
         "actuators/lcd_driver"
-        "actuators/servo_driver"
         "actuators/buzzer_driver"
+        "actuators/servo_driver"
 
         "comms/gsm_sim800"
         "comms/gps"
