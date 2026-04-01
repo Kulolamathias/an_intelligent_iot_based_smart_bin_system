@@ -20,10 +20,11 @@
  */
 
 #include "bin_network_service.h"
+#include "mqtt_topic.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/timers.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "esp_timer.h"
 #include "esp_log.h"
 #include "esp_efuse.h"
 #include "esp_mac.h"
@@ -90,17 +91,17 @@ typedef struct {
  * Service context (static)
  * ------------------------------------------------------------------------- */
 typedef struct {
-    TaskHandle_t task;                     /**< Service task handle */
-    QueueHandle_t queue;                    /**< Internal event queue */
-    TimerHandle_t heartbeat_timer;          /**< Periodic heartbeat timer */
-    peer_bin_t peers[MAX_PEERS];            /**< Static peer registry */
-    uint32_t peer_count;                     /**< Current number of valid peers */
-    bool mqtt_connected;                     /**< True if MQTT is up */
-    char own_id[BIN_ID_STR_LEN];             /**< Own bin ID (MAC) */
-    float own_latitude;                      /**< Last known latitude */
-    float own_longitude;                     /**< Last known longitude */
-    uint8_t own_fill_percent;                 /**< Current fill level */
-    uint8_t own_capacity;                     /**< Bin capacity (config) */
+    TaskHandle_t task;                          /**< Service task handle */
+    QueueHandle_t queue;                        /**< Internal event queue */
+    esp_timer_handle_t heartbeat_timer;         /**< Periodic heartbeat timer */
+    peer_bin_t peers[MAX_PEERS];                /**< Static peer registry */
+    uint32_t peer_count;                        /**< Current number of valid peers */
+    bool mqtt_connected;                        /**< True if MQTT is up */
+    char own_id[BIN_ID_STR_LEN];                /**< Own bin ID (MAC) */
+    float own_latitude;                         /**< Last known latitude */
+    float own_longitude;                        /**< Last known longitude */
+    uint8_t own_fill_percent;                   /**< Current fill level */
+    uint8_t own_capacity;                       /**< Bin capacity (config) */
 } bin_network_ctx_t;
 
 static bin_network_ctx_t s_ctx = {0};
@@ -110,11 +111,12 @@ static bin_network_ctx_t s_ctx = {0};
  * ------------------------------------------------------------------------- */
 static void bin_network_task(void *pvParameters);
 static void process_internal_event(const internal_event_t *ev);
-static void heartbeat_timer_callback(TimerHandle_t xTimer);
+static void heartbeat_timer_callback(void *arg);
 static void publish_heartbeat(void);
 static void publish_state(void);
 static void publish_cloud_heartbeat(void);
 static void subscribe_topics(void);
+static void publish_device_online(void);
 static void handle_peer_announce(const char *payload, size_t len);
 static void handle_peer_state(const char *topic, const char *payload, size_t len);
 static void handle_lwt_offline(const char *topic);
@@ -189,6 +191,21 @@ static esp_err_t handle_level_update(void *context, void *params)
     return ESP_OK;
 }
 
+static void publish_device_online(void)
+{
+    char topic[128];
+    mqtt_topic_build(topic, sizeof(topic), "status/online");
+    const char *payload = "online";
+    cmd_publish_mqtt_params_t pub;
+    strlcpy(pub.topic, topic, sizeof(pub.topic));
+    strlcpy((char*)pub.payload, payload, sizeof(pub.payload));
+    pub.payload_len = strlen(payload);
+    pub.qos = 1;
+    pub.retain = true;
+    command_router_execute(CMD_PUBLISH_MQTT, &pub);
+    ESP_LOGI(TAG, "Published online status to %s", topic);
+}
+
 /* -------------------------------------------------------------------------
  * Public API (service manager lifecycle)
  * ------------------------------------------------------------------------- */
@@ -206,22 +223,20 @@ esp_err_t bin_network_service_init(void)
     }
 
     /* Create heartbeat timer (FreeRTOS software timer) */
-    s_ctx.heartbeat_timer = xTimerCreate(
-        "bin_net_hb",
-        pdMS_TO_TICKS(HEARTBEAT_PERIOD_MS),
-        pdTRUE,                 /* auto-reload */
-        NULL,
-        heartbeat_timer_callback
-    );
-    if (!s_ctx.heartbeat_timer) {
-        vQueueDelete(s_ctx.queue);
-        s_ctx.queue = NULL;
+    esp_timer_create_args_t timer_args = {
+        .callback = heartbeat_timer_callback,
+        .arg = NULL,
+        .name = "bin_net_hb"
+    };
+    esp_err_t ret = esp_timer_create(&timer_args, &s_ctx.heartbeat_timer);
+    if (ret != ESP_OK) {
+        // handle error
         return ESP_ERR_NO_MEM;
     }
 
     /* Retrieve own MAC address for bin ID */
     uint8_t mac[6];
-    esp_err_t ret = esp_efuse_mac_get_default(mac);
+    ret = esp_efuse_mac_get_default(mac);
     if (ret != ESP_OK) {
         return ret;
     }
@@ -236,7 +251,8 @@ esp_err_t bin_network_service_init(void)
     /* Create service task */
     BaseType_t ret_task = xTaskCreate(bin_network_task, "bin_net", 4096, NULL, 5, &s_ctx.task);
     if (ret_task != pdPASS) {
-        xTimerDelete(s_ctx.heartbeat_timer, 0);
+        esp_timer_stop(s_ctx.heartbeat_timer);
+        esp_timer_delete(s_ctx.heartbeat_timer);
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         return ESP_ERR_NO_MEM;
@@ -268,9 +284,7 @@ esp_err_t bin_network_service_register_commands(void)
 
 esp_err_t bin_network_service_start(void)
 {
-    if (xTimerStart(s_ctx.heartbeat_timer, 0) != pdPASS) {
-        return ESP_FAIL;
-    }
+    esp_timer_start_periodic(s_ctx.heartbeat_timer, HEARTBEAT_PERIOD_MS * 1000);
     ESP_LOGI(TAG, "Bin network service started");
     return ESP_OK;
 }
@@ -302,6 +316,7 @@ static void process_internal_event(const internal_event_t *ev)
             publish_heartbeat();
             publish_state();
             publish_cloud_heartbeat();
+            publish_device_online();
             break;
 
         case INT_EVT_NETWORK_MESSAGE: {
@@ -357,9 +372,9 @@ static void process_internal_event(const internal_event_t *ev)
 /* -------------------------------------------------------------------------
  * Timer callback (heartbeat)
  * ------------------------------------------------------------------------- */
-static void heartbeat_timer_callback(TimerHandle_t xTimer)
+static void heartbeat_timer_callback(void *arg)
 {
-    (void)xTimer;
+    (void)arg;
     internal_event_t ev = { .id = INT_EVT_HEARTBEAT };
     xQueueSend(s_ctx.queue, &ev, 0);
 }

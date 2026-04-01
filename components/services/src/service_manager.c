@@ -15,12 +15,16 @@
 
 #include "timer_service.h"
 #include "indicator_service.h"
+#include "led_service.h"
 #include "gsm_service.h"
+#include "gps_service.h"
+#include "pir_service.h"
 #include "ultrasonic_service.h"
 #include "servo_service.h"
 #include "wifi_service.h"
 #include "mqtt_service.h"
 #include "bin_network_service.h"
+#include "web_command_service.h"
 
 
 static const char *TAG = "SERVICE_MGR";
@@ -48,11 +52,23 @@ static const service_entry_t s_services[] = {
         .register_handlers = timer_service_register_handlers,
         .start = timer_service_start
     },
+    // {
+    //     .name = "indicator",
+    //     .init = indicator_service_init,
+    //     .register_handlers = indicator_service_register_handlers,
+    //     .start = indicator_service_start
+    // },
     {
-        .name = "indicator",
-        .init = indicator_service_init,
-        .register_handlers = indicator_service_register_handlers,
-        .start = indicator_service_start
+        .name = "led",
+        .init = led_service_init,
+        .register_handlers = led_service_register_handlers,
+        .start = led_service_start
+    },
+    {
+        .name = "gps",
+        .init = gps_service_init,
+        .register_handlers = gps_service_register_handlers,
+        .start = gps_service_start
     },
     // {
     //     .name = "gsm",
@@ -79,6 +95,18 @@ static const service_entry_t s_services[] = {
         .start = bin_network_service_start
     },
     {
+        .name = "web_cmd",
+        .init = web_command_service_init,
+        .register_handlers = web_command_service_register_handlers,
+        .start = web_command_service_start
+    },
+    {
+        .name = "pir",
+        .init = pir_service_init,
+        .register_handlers = pir_service_register_handlers,
+        .start = pir_service_start
+    },
+    {
         .name = "ultrasonic",
         .init = ultrasonic_service_init,
         .register_handlers = ultrasonic_service_register_handlers,
@@ -90,12 +118,12 @@ static const service_entry_t s_services[] = {
         .register_handlers = servo_service_register_handlers,
         .start = servo_service_start
     },
-    {
-        .name = "example",
-        .init = example_service_init,
-        .register_handlers = example_service_register_handlers,
-        .start = example_service_start
-    }
+    // {
+    //     .name = "example",
+    //     .init = example_service_init,
+    //     .register_handlers = example_service_register_handlers,
+    //     .start = example_service_start
+    // }
     // Future services will be added here in dependency order
 };
 

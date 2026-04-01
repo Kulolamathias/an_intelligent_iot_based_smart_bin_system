@@ -42,6 +42,7 @@ typedef struct {
  * STATIC REGISTRY – all slots initially empty
  * ============================================================ */
 static command_handler_entry_t g_command_registry[MAX_REGISTERED_COMMANDS] = {0};
+static bool s_locked = false;
 
 /* ============================================================
  * INTERNAL VALIDATION
@@ -57,6 +58,13 @@ static bool is_valid_command(system_command_id_t command)
 
 esp_err_t command_router_init(void)
 {
+    /* Clear registry and reset lock */
+    for (int i = 0; i < MAX_REGISTERED_COMMANDS; i++) {
+        g_command_registry[i].handler = NULL;
+        g_command_registry[i].context = NULL;
+        g_command_registry[i].registered = false;
+    }
+    s_locked = false;
     ESP_LOGI(TAG, "Command router initialized (registry empty)");
     return ESP_OK;
 }
@@ -85,9 +93,14 @@ esp_err_t command_router_register_handler(
     if (!is_valid_command(command) || handler == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (s_locked) {
+        ESP_LOGE(TAG, "Cannot register after lock");
+        return ESP_ERR_INVALID_STATE;
+    }
 
     command_handler_entry_t *entry = &g_command_registry[command];
     if (entry->registered) {
+        ESP_LOGE(TAG, "Handler already registered for command %d", command);
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -96,4 +109,15 @@ esp_err_t command_router_register_handler(
     entry->registered = true;
 
     return ESP_OK;
+}
+
+void command_router_lock(void)
+{
+    s_locked = true;
+    ESP_LOGI(TAG, "Command router locked");
+}
+
+bool command_router_is_locked(void)
+{
+    return s_locked;
 }

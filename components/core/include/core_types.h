@@ -43,8 +43,8 @@ extern "C" {
 #endif
 
 /* ------------------------------------------------------------
- * GPS Coordinate Representation
- * ------------------------------------------------------------ */
+* GPS Coordinate Representation
+* ------------------------------------------------------------ */
 typedef struct {
     double latitude;          /**< Decimal degrees, positive north */
     double longitude;         /**< Decimal degrees, positive east */
@@ -53,8 +53,8 @@ typedef struct {
 } gps_coordinates_t;
 
 /* ------------------------------------------------------------
- * Authentication Status
- * ------------------------------------------------------------ */
+* Authentication Status
+* ------------------------------------------------------------ */
 typedef enum {
     AUTH_STATUS_NONE = 0,     /**< No authentication attempted */
     AUTH_STATUS_PENDING,      /**< Authentication in progress */
@@ -63,8 +63,8 @@ typedef enum {
 } auth_status_t;
 
 /* ------------------------------------------------------------
- * Error Flags (bitmask)
- * ------------------------------------------------------------ */
+* Error Flags (bitmask)
+* ------------------------------------------------------------ */
 typedef uint32_t error_flags_t;
 #define ERROR_FLAG_NONE         (0U)      /**< No active errors */
 #define ERROR_FLAG_SENSOR       (1U << 0) /**< Sensor failure */
@@ -73,8 +73,8 @@ typedef uint32_t error_flags_t;
 #define ERROR_FLAG_CONFIG       (1U << 3) /**< Configuration corrupted */
 
 /* ------------------------------------------------------------
- * Neighbor Bin Information (received via bin-to-bin communication)
- * ------------------------------------------------------------ */
+* Neighbor Bin Information (received via bin-to-bin communication)
+* ------------------------------------------------------------ */
 typedef struct {
     uint8_t mac[6];                    /**< MAC address of peer bin */
     gps_coordinates_t location;        /**< Peer's location */
@@ -83,8 +83,8 @@ typedef struct {
 } neighbor_bin_info_t;
 
 /* ------------------------------------------------------------
- * Servo Identification (for multi‑servo systems)
- * ------------------------------------------------------------ */
+* Servo Identification (for multi‑servo systems)
+* ------------------------------------------------------------ */
 typedef enum {
     SERVO_LID = 0,      /**< Main bin lid servo */
     SERVO_AUX,          /**< Reserved for future auxiliary servos */

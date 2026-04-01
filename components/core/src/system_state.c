@@ -25,7 +25,7 @@
 #include <stddef.h>
 
 /* ============================================================
- * SINGLE AUTHORITATIVE INSTANCE
+ * SINGLE AUTHORITATIVE INSTANCE 
  *
  * This static variable is the ONE TRUE SOURCE of the current state.
  * It is never exposed directly; all access is through the public API.
@@ -60,8 +60,8 @@ const char* system_state_to_string(system_state_t state)
     switch (state) {
         case SYSTEM_STATE_INIT:        return "INIT";
         case SYSTEM_STATE_IDLE:        return "IDLE";
-        case SYSTEM_STATE_AUTH:        return "AUTH";
-        case SYSTEM_STATE_PROCESSING:  return "PROCESSING";
+        case SYSTEM_STATE_ACTIVE:      return "ACTIVE";
+        case SYSTEM_STATE_NEAR_FULL:   return "NEAR_FULL";
         case SYSTEM_STATE_FULL:        return "FULL";
         case SYSTEM_STATE_ERROR:       return "ERROR";
         case SYSTEM_STATE_MAINTENANCE: return "MAINTENANCE";

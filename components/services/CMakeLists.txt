@@ -2,7 +2,8 @@ idf_component_register(
     SRCS
         "src/service_manager.c"
         "timer/timer_service.c"
-        "indicator/indicator_service.c"
+        
+        # "indicator/indicator_service.c"
 
         "connectivity/connectivity_service.c"
         "connectivity/gsm/gsm_service.c"
@@ -14,8 +15,16 @@ idf_component_register(
 
         "networking/bin_network_service/bin_network_service.c"
 
+        "web_command/web_command_service.c"
+
+        "location/gps_service.c"
+
+        "sensing/pir/pir_service.c"
         "sensing/ultrasonic/ultrasonic_service.c"
-        "actuation/servo_service/servo_service.c"
+
+        "actuation/led/led_service.c"
+        "actuation/servo/servo_service.c"
+
         "example/example_service.c"
 
 
@@ -28,9 +37,12 @@ idf_component_register(
         "config"
 
         "sensing"
+        "sensing/pir"
         "sensing/ultrasonic"
+
         "actuation"
-        "actuation/servo_service"
+        "actuation/led"
+        "actuation/servo"
 
         "connectivity"
         "connectivity/gsm"
@@ -38,6 +50,8 @@ idf_component_register(
         "connectivity/mqtt/include"
 
         "networking/bin_network_service"
+
+        "web_command"
 
         "indicator"
         "location"

@@ -38,6 +38,7 @@
 
 #include "command_types.h"
 #include "esp_err.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -70,13 +71,28 @@ esp_err_t command_router_execute(system_command_id_t command, void *params);
  * @param command Command ID.
  * @param handler Function pointer to handler.
  * @param context Service context (passed to handler on each call).
- * @return ESP_OK on success, ESP_ERR_INVALID_STATE if already registered.
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if already registered
+ *         or router locked.
  */
 esp_err_t command_router_register_handler(
     system_command_id_t command,
     esp_err_t (*handler)(void *context, void *params),
     void *context
 );
+
+/**
+ * @brief Lock the command router.
+ * 
+ * After calling this function, no more handlers can be registered.
+ * Must be called after all service registration.
+ */
+void command_router_lock(void);
+
+/**
+ * @brief Check if the command router is locked.
+ * @return true if locked, false otherwise.
+ */
+bool command_router_is_locked(void);
 
 #ifdef __cplusplus
 }

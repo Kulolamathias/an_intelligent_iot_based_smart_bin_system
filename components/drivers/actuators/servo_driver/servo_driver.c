@@ -1,155 +1,208 @@
 /**
- * @file servo_driver.c
- * @brief Servo driver implementation using LEDC.
+ * @file components/drivers/actuators/servo_driver/servo_driver.c
+ * @brief Servo Driver – implementation using LEDC.
  *
  * =============================================================================
- * Uses LEDC high‑speed mode. The driver computes duty cycle from pulse width
- * based on the timer resolution (configured automatically by LEDC).
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - Uses LEDC with 10‑bit resolution (0..1023) and 50 Hz PWM frequency.
+ * - Each servo uses its own LEDC channel and can share a timer if the same
+ *   frequency is used (which is true for standard servos).
+ * - The `stop` function sets the duty cycle to 0, disabling the PWM signal
+ *   and allowing the servo to relax.
+ * - Multiple instances are supported by storing channel and timer per handle.
  * =============================================================================
  */
 
 #include "servo_driver.h"
-#include "esp_err.h"
 #include "esp_log.h"
 #include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
-
-
-
 
 static const char *TAG = "SERVO_DRV";
 
-/**
- * Internal handle structure.
- */
+/* LEDC resolution (10 bits = 1024 steps) */
+#define LEDC_RESOLUTION_BITS   10
+#define LEDC_RESOLUTION_STEPS  (1 << LEDC_RESOLUTION_BITS)
+
+/* Default frequency for servos (50 Hz) */
+#define DEFAULT_FREQ_HZ        50
+
+/* Internal handle structure */
 struct servo_handle_t {
-    gpio_num_t pwm_pin;
-    ledc_timer_t timer;
     ledc_channel_t channel;
-    uint32_t frequency_hz;
+    ledc_timer_t timer;
+    gpio_num_t gpio_num;
     uint32_t min_pulse_us;
     uint32_t max_pulse_us;
-    uint32_t max_duty;            /* cached from LEDC timer configuration */
+    uint32_t freq_hz;
+    bool initialized;
 };
 
-/* Helper: compute duty cycle for a given pulse width (us) */
-static uint32_t pulse_to_duty(servo_handle_t handle, uint32_t pulse_us)
+/* Helper: convert angle to duty cycle (0..resolution-1) */
+static uint32_t angle_to_duty(servo_handle_t handle, float angle_deg)
 {
-    /* LEDC duty resolution is (2^duty_res) steps, where duty_res is set during timer config.
-       The driver automatically uses the highest possible resolution for the given frequency.
-       We can obtain the max duty from ledc_get_max_duty(handle->timer). */
-    uint64_t duty = (uint64_t)pulse_us * handle->max_duty / (1000000ULL / handle->frequency_hz);
-    return (uint32_t)duty;
+    /* Clamp angle to 0..180 */
+    if (angle_deg < 0) angle_deg = 0;
+    if (angle_deg > 180) angle_deg = 180;
+
+    /* Linear interpolation between min and max pulse widths */
+    uint32_t pulse_us = handle->min_pulse_us +
+                        (uint32_t)((handle->max_pulse_us - handle->min_pulse_us) * angle_deg / 180.0f);
+
+    /* Period in microseconds = 1,000,000 / freq_hz */
+    uint32_t period_us = 1000000 / handle->freq_hz;
+    uint32_t duty = (pulse_us * LEDC_RESOLUTION_STEPS) / period_us;
+    if (duty >= LEDC_RESOLUTION_STEPS) duty = LEDC_RESOLUTION_STEPS - 1;
+    return duty;
 }
 
-esp_err_t servo_driver_create(const servo_config_t *config,
-                              servo_handle_t *out_handle)
+esp_err_t servo_driver_create(const servo_config_t *cfg, servo_handle_t *out_handle)
 {
-    if (config == NULL || out_handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (!cfg || !out_handle) return ESP_ERR_INVALID_ARG;
 
+    /* Allocate handle */
     servo_handle_t handle = calloc(1, sizeof(struct servo_handle_t));
-    if (handle == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
+    if (!handle) return ESP_ERR_NO_MEM;
 
-    memcpy(handle, config, sizeof(servo_config_t));
+    handle->gpio_num = cfg->gpio_num;
+    handle->channel = cfg->channel;
+    handle->timer = cfg->timer;
+    handle->min_pulse_us = cfg->min_pulse_us;
+    handle->max_pulse_us = cfg->max_pulse_us;
+    handle->freq_hz = (cfg->freq_hz != 0) ? cfg->freq_hz : DEFAULT_FREQ_HZ;
+    handle->initialized = false;
 
-    /* Configure LEDC timer (high speed) */
-    ledc_timer_config_t timer_conf = {
+    /* Configure LEDC timer (only once per timer group; if timer already configured, this may fail.
+       To keep it simple, we assume each servo uses its own timer or we ignore reconfig errors.
+       In production, you'd want to check if timer is already configured. */
+    ledc_timer_config_t timer_cfg = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num  = handle->timer,
-        .duty_resolution = LEDC_TIMER_10_BIT, /* will be auto-adjusted? Actually we need to pick a resolution.
-                                                 LEDC driver can auto-select based on frequency, but we set manually for clarity */
-        .freq_hz    = handle->frequency_hz,
-        .clk_cfg    = LEDC_AUTO_CLK
+        .duty_resolution = LEDC_RESOLUTION_BITS,
+        .timer_num = handle->timer,
+        .freq_hz = handle->freq_hz,
+        .clk_cfg = LEDC_AUTO_CLK,
     };
-    /* Let the driver choose the highest resolution that fits the frequency */
-    timer_conf.duty_resolution = LEDC_TIMER_13_BIT; /* try 13-bit; could be more generic */
-    /* Instead, we can use ledc_timer_config() with duty_resolution = LEDC_TIMER_13_BIT
-       and it will reduce resolution if needed. We'll accept the result. */
-    esp_err_t ret = ledc_timer_config(&timer_conf);
+    esp_err_t ret = ledc_timer_config(&timer_cfg);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "LEDC timer config failed: %d", ret);
-        free(handle);
-        return ret;
+        ESP_LOGW(TAG, "Timer %d already configured (ignoring)", handle->timer);
+        /* Not fatal, but continue */
     }
-
-    /* Get the actual max duty (depends on resolution) */
-    handle->max_duty = (1 << timer_conf.duty_resolution) - 1;
 
     /* Configure LEDC channel */
-    ledc_channel_config_t chan_conf = {
-        .gpio_num   = handle->pwm_pin,
+    ledc_channel_config_t ch_cfg = {
+        .gpio_num = handle->gpio_num,
         .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel    = handle->channel,
-        .timer_sel  = handle->timer,
-        .duty       = 0,
-        .hpoint     = 0,
-        .intr_type  = LEDC_INTR_DISABLE
+        .channel = handle->channel,
+        .timer_sel = handle->timer,
+        .duty = 0,
+        .hpoint = 0,
     };
-    ret = ledc_channel_config(&chan_conf);
+    ret = ledc_channel_config(&ch_cfg);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "LEDC channel config failed: %d", ret);
         free(handle);
         return ret;
     }
 
+    handle->initialized = true;
     *out_handle = handle;
-    ESP_LOGD(TAG, "Servo created on pin %d", handle->pwm_pin);
+    ESP_LOGI(TAG, "Servo created (GPIO %d, channel %d)", handle->gpio_num, handle->channel);
     return ESP_OK;
 }
 
 esp_err_t servo_driver_set_angle(servo_handle_t handle, float angle_deg)
 {
-    if (handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (!handle || !handle->initialized) return ESP_ERR_INVALID_STATE;
 
-    /* Clamp angle to [0, 180] */
-    if (angle_deg < 0.0f) angle_deg = 0.0f;
-    if (angle_deg > 180.0f) angle_deg = 180.0f;
-
-    /* Convert angle to pulse width */
-    uint32_t pulse_us = handle->min_pulse_us +
-        (uint32_t)((handle->max_pulse_us - handle->min_pulse_us) * angle_deg / 180.0f);
-
-    /* Convert pulse width to duty */
-    uint32_t duty = pulse_to_duty(handle, pulse_us);
-
-    /* Set duty */
+    uint32_t duty = angle_to_duty(handle, angle_deg);
     esp_err_t ret = ledc_set_duty(LEDC_LOW_SPEED_MODE, handle->channel, duty);
-    if (ret != ESP_OK) {
-        return ret;
-    }
+    if (ret != ESP_OK) return ret;
     ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, handle->channel);
-    ESP_LOGD(TAG, "Set angle %.1f° → pulse %"PRIu32" us, duty %"PRIu32, angle_deg, pulse_us, duty);
     return ret;
 }
 
 esp_err_t servo_driver_stop(servo_handle_t handle)
 {
-    if (handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    /* Set duty to 0 effectively stops PWM (signal low) */
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, handle->channel, 0);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, handle->channel);
-    ESP_LOGD(TAG, "Servo stopped (duty 0)");
-    return ESP_OK;
+    if (!handle || !handle->initialized) return ESP_ERR_INVALID_STATE;
+
+    /* Set duty to 0 to stop PWM signal */
+    esp_err_t ret = ledc_set_duty(LEDC_LOW_SPEED_MODE, handle->channel, 0);
+    if (ret != ESP_OK) return ret;
+    ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, handle->channel);
+    return ret;
 }
 
 esp_err_t servo_driver_delete(servo_handle_t handle)
 {
-    if (handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    /* Optionally stop PWM before deleting */
+    if (!handle) return ESP_ERR_INVALID_ARG;
+
+    /* Stop the servo first */
     servo_driver_stop(handle);
+
+    /* Optionally, release the channel? LEDC doesn't have a delete function,
+       but we can reset the channel configuration. */
+    ledc_channel_config_t ch_cfg = {
+        .gpio_num = handle->gpio_num,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = handle->channel,
+        .timer_sel = handle->timer,
+        .duty = 0,
+        .hpoint = 0,
+    };
+    ledc_channel_config(&ch_cfg); /* Reconfigure to default, but not necessary. */
+
     free(handle);
-    ESP_LOGD(TAG, "Servo deleted");
+    ESP_LOGI(TAG, "Servo deleted");
     return ESP_OK;
 }
+
+
+
+#if 0  /**< RESERVED FOR gradual movement */
+
+// Add these constants
+#define SERVO_STEP_DELAY_MS  20      // 20 ms between steps
+#define SERVO_STEP_DEG        5       // 5° per step
+
+// Add a static variable for the current target angle (if you want to track)
+static float s_current_angle = 0.0f;
+static bool s_moving = false;
+static float s_target_angle = 0.0f;
+static TimerHandle_t s_ramp_timer = NULL;  // using esp_timer or FreeRTOS timer
+
+// Timer callback to perform one step
+static void ramp_step_callback(TimerHandle_t xTimer)
+{
+    if (!s_moving) return;
+    float step = (s_target_angle > s_current_angle) ? SERVO_STEP_DEG : -SERVO_STEP_DEG;
+    float new_angle = s_current_angle + step;
+    if ((step > 0 && new_angle >= s_target_angle) || (step < 0 && new_angle <= s_target_angle)) {
+        new_angle = s_target_angle;
+        s_moving = false;
+        xTimerStop(s_ramp_timer, 0);
+    }
+    servo_driver_set_angle(s_servo, new_angle);
+    s_current_angle = new_angle;
+    if (!s_moving) {
+        // Movement complete – post lid opened/closed event
+        system_event_t ev = {
+            .id = (s_target_angle == 90.0f) ? EVENT_LID_OPENED : EVENT_LID_CLOSED,
+            .timestamp_us = esp_timer_get_time(),
+            .source = 0,
+            .data = {0}
+        };
+        service_post_event(&ev);
+    }
+}
+
+// Modified open/close handlers using ramp
+static esp_err_t cmd_open_lid_ramp(void *context, void *params)
+{
+    (void)context; (void)params;
+    if (s_moving) return ESP_ERR_INVALID_STATE;
+    s_target_angle = 90.0f;
+    s_moving = true;
+    xTimerReset(s_ramp_timer, 0);
+    return ESP_OK;
+}
+
+#endif

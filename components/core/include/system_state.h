@@ -28,6 +28,9 @@
  * - Does NOT contain any transition logic
  * - Does NOT know about other core modules
  *
+ * SYSTEM_STATE_ANY is a special sentinel used in transition rules to match
+ * any state, avoiding duplication of rules across states.
+ * 
  * =============================================================================
  * @version 1.0.0
  * @author Core Architecture Group
@@ -53,14 +56,17 @@ extern "C" {
 typedef enum {
     SYSTEM_STATE_INIT = 0,      /**< System starting, hardware not ready */
     SYSTEM_STATE_IDLE,          /**< Waiting for user interaction */
-    SYSTEM_STATE_AUTH,          /**< Authentication in progress */
-    SYSTEM_STATE_PROCESSING,    /**< Validated disposal in progress */
+    SYSTEM_STATE_ACTIVE,        /**< User interaction in progress (attention + disposal) */
+    SYSTEM_STATE_NEAR_FULL,     /**< Fill level above near‑full threshold */
     SYSTEM_STATE_FULL,          /**< Bin full – locked, redirect active */
+    SYSTEM_STATE_MAINTENANCE,   /**< GSM‑authenticated servicing mode */
     SYSTEM_STATE_ERROR,         /**< Fault condition – safe fallback */
-    SYSTEM_STATE_MAINTENANCE,   /**< Service/configuration mode */
     SYSTEM_STATE_LOW_POWER,     /**< Reserved for future power saving */
     SYSTEM_STATE_MAX
 } system_state_t;
+
+/* Special value to match any state in transition rules */
+#define SYSTEM_STATE_ANY SYSTEM_STATE_MAX
 
 /* ============================================================
  * TRANSITION RESULT (internal use only)

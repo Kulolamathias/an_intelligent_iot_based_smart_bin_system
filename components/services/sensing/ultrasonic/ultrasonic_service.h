@@ -1,3 +1,26 @@
+// #ifndef BIN_SERVICE_H
+// #define BIN_SERVICE_H
+
+// #include "esp_err.h"
+
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
+
+// esp_err_t bin_service_init(void);
+// esp_err_t bin_service_register_handlers(void);
+// esp_err_t bin_service_start(void);
+
+
+// #ifdef __cplusplus
+// }
+// #endif
+
+// #endif /* BIN_SERVICE_H */
+
+
+
+
 /**
  * @file ultrasonic_service.h
  * @brief Ultrasonic Service – manages fill-level and intention sensors.

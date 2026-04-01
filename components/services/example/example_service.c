@@ -51,7 +51,7 @@ static void example_simulate_event(void)
 {
     system_event_t ev = {
         .id = EVENT_PERSON_DETECTED,
-        .data = { {0} }   // zero payload /**<TODO: to be reviewed (this line) */
+        .data = { { {0} } }   // zero payload /**<TODO: to be reviewed (this line) */
     };
     esp_err_t ret = service_post_event(&ev);
     if (ret != ESP_OK) {

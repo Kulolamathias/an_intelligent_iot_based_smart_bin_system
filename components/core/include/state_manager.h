@@ -66,7 +66,7 @@ typedef struct {
      * Fill level and bin lock state
      * -------------------------------------------------------- */
     uint8_t bin_fill_level_percent;   /**< 0-100%, last measurement */
-    bool bin_locked;                 /**< true = lid disabled */
+    bool bin_locked;                  /**< true = lid disabled */
 
     /* --------------------------------------------------------
      * Configurable thresholds (runtime adjustable)
@@ -81,8 +81,8 @@ typedef struct {
      * Extended context – feature placeholders
      * -------------------------------------------------------- */
     gps_coordinates_t gps_coordinates; /**< Last known position */
-    auth_status_t auth_status;        /**< Current authentication state */
-    error_flags_t error_flags;        /**< Active error conditions */
+    auth_status_t auth_status;         /**< Current authentication state */
+    error_flags_t error_flags;         /**< Active error conditions */
 
 } system_context_t;
 

@@ -252,8 +252,8 @@ static void post_event(system_event_id_t id)
 static void post_bin_level_event(uint8_t level)
 {
     system_event_t ev = {
-        .id = EVENT_BIN_LEVEL_UPDATED,
-        .data.bin_level.fill_level_percent = level
+        .id = EVENT_FILL_LEVEL_UPDATED,
+        .data.fill_level.fill_percent = level
     };
     event_dispatcher_post_event(&ev);
     vTaskDelay(pdMS_TO_TICKS(50));

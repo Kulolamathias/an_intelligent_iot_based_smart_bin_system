@@ -29,10 +29,15 @@
 
 static const char* TAG = "wifi_service";
 
+/* Configuration (should be moved to Kconfig / menuconfig) */
+#define CONFIG_WIFI_SSID        "Mathias' Sxx U..."
+#define CONFIG_WIFI_PASSWORD    "1234567890223"
+
+
 /* Default configuration values (used if no command overrides) */
 #define WIFI_DEFAULT_MIN_RETRY_MS   1000
 #define WIFI_DEFAULT_MAX_RETRY_MS   60000
-#define WIFI_DEFAULT_MAX_ATTEMPTS    5
+#define WIFI_DEFAULT_MAX_ATTEMPTS    0      /* 0 = infinite retries */
 
 /* Static service context (single instance) */
 static struct wifi_service_context s_ctx = {0};
@@ -114,7 +119,7 @@ esp_err_t wifi_service_init(void)
     }
 
     /* Create service task */
-    BaseType_t ret = xTaskCreate(wifi_service_task, "wifi_svc", 4096, NULL, 5, &s_ctx.task);
+    BaseType_t ret = xTaskCreate(wifi_service_task, "wifi_svc", 8192, NULL, 5, &s_ctx.task);
     if (ret != pdPASS) {
         wifi_driver_register_callback(NULL);
         wifi_driver_stop();
@@ -154,8 +159,16 @@ esp_err_t wifi_service_register_handlers(void)
 
 esp_err_t wifi_service_start(void)
 {
-    /* Driver already started in init; nothing to do */
-    ESP_LOGI(TAG, "WiFi service started");
+    /* Initiate WiFi connection asynchronously */
+    cmd_connect_wifi_params_t wifi_conn = {
+        .ssid = CONFIG_WIFI_SSID,
+        .password = CONFIG_WIFI_PASSWORD,
+        .auth_mode = 0
+    };
+    ESP_LOGI(TAG, "Initiating WiFi connection...");
+    command_router_execute(CMD_CONNECT_WIFI, &wifi_conn);
+
+    ESP_LOGI(TAG, "WiFi service started (connection in progress)");
     return ESP_OK;
 }
 
@@ -492,7 +505,7 @@ static void emit_event(system_event_id_t event, void *data)
 {
     system_event_t ev = {
         .id = event,
-        .data = { {0} }
+        .data = { { {0} } }
     };
 
     switch (event) {

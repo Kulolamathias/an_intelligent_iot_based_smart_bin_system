@@ -108,40 +108,66 @@ typedef enum {
     CMD_CONNECT_GSM,            /**< Initiate GSM connection */
     CMD_DISCONNECT_GSM,         /**< Terminate GSM link */
     CMD_SEND_SMS,               /**< Send an SMS (params: cmd_send_sms_params_t) */
+    CMD_SEND_SMS_RESPONSE,       /**< Send SMS reply (params: cmd_send_sms_response_params_t) */
     CMD_SET_GSM_PASSWORD,       /**< Set GSM password (params: string) – optional */
     CMD_SET_AUTHORIZED_NUMBERS, /**< Set authorized numbers (params: array) – optional */
+
+    CMD_GPS_START,              /**< Power on GPS module and begin fix acquisition */
+    CMD_GPS_STOP,               /**< Power down GPS module */
+    CMD_GPS_GET_LAST_FIX,       /**< Retrieve most recent GPS coordinates */
 
     CMD_BIN_NET_NOTIFY_MQTT_CONNECTED,  /**< Inform neighbor bins of MQTT connection */
     CMD_BIN_NET_NOTIFY_NETWORK_MESSAGE, /**< Notify neighbor bins of network message */
     CMD_BIN_NET_NOTIFY_LEVEL_UPDATE,    /**< Notify neighbor bins of level update */
 
+    CMD_PROCESS_WEB_COMMAND,        /**< Process incoming web command (params: web_command_params_t) */
+
     /* --------------------------------------------------------
      * Sensor commands – measurement triggers
      * -------------------------------------------------------- */
-    CMD_READ_FILL_LEVEL,        /**< Start ultrasonic ranging */
     CMD_READ_PRESENCE,          /**< Sample PIR/radar */
-    CMD_READ_INTENT_SENSOR,     /**< Sample intent sensor (tilted ultrasonic/radar) */
     CMD_READ_BATTERY_LEVEL,     /**< Query power supply */
     CMD_CALIBRATE_SENSORS,      /**< Perform sensor calibration */
 
     /* --------------------------------------------------------
+     * Bin sensing
+     * -------------------------------------------------------- */
+    COMMAND_READ_FILL_LEVEL,        /**< Read fill level sensor (1st ultrasonic) TODO: COMMAND to CMD to change..*/
+    COMMAND_READ_INTENT_SENSOR,     /**< Read intention sensor (tilted ultrasonic/radar)*/
+
+    CMD_START_PIR_MONITORING,   /**< Start periodic PIR polling */
+    CMD_STOP_PIR_MONITORING,    /**< Stop PIR polling */
+
+    /* --------------------------------------------------------
+     * LED commands
+     * -------------------------------------------------------- */
+    CMD_LED_ON,                 /**< Turn LED on (full brightness) */
+    CMD_LED_OFF,                /**< Turn LED off */
+    CMD_LED_TOGGLE,             /**< Toggle LED */
+    CMD_LED_SET_BRIGHTNESS,     /**< Set LED brightness (params: led_brightness_params_t) */
+    CMD_LED_BLINK,              /**< Start blinking (params: led_blink_params_t) */
+    CMD_LED_BLINK_STOP,         /**< Stop blinking */
+    CMD_LED_FADE,               /**< Smooth fade (params: led_fade_params_t) */
+
+    /* --------------------------------------------------------
      * Timer commands – software timer management
      * -------------------------------------------------------- */
-    CMD_START_INTENT_TIMER,     /**< Begin intent window countdown */
-    CMD_STOP_INTENT_TIMER,      /**< Cancel intent timer */
-    CMD_START_ESCALATION_TIMER, /**< Begin escalation delay */
-    CMD_STOP_ESCALATION_TIMER,  /**< Cancel escalation timer */
-    CMD_START_PERIODIC_TIMER,   /**< Begin periodic heartbeat cycle */
-    CMD_STOP_PERIODIC_TIMER,    /**< Stop periodic heartbeat */
-    CMD_START_ONESHOT_TIMER,   /**< Start a one‑shot timer (generic) */
-    CMD_STOP_ONESHOT_TIMER,    /**< Stop a one‑shot timer (generic) */
+    CMD_START_INTENT_TIMER,             /**< Begin intent window countdown */
+    CMD_STOP_INTENT_TIMER,              /**< Cancel intent timer */
+    CMD_START_ESCALATION_TIMER,         /**< Begin escalation delay */
+    CMD_STOP_ESCALATION_TIMER,          /**< Cancel escalation timer */
+    CMD_SEND_ESCALATION_NOTIFICATION,   /**< Send escalation alert immediately */
+    CMD_START_PERIODIC_TIMER,           /**< Begin periodic heartbeat cycle */
+    CMD_STOP_PERIODIC_TIMER,            /**< Stop periodic heartbeat */
+    CMD_START_ONESHOT_TIMER,            /**< Start a one‑shot timer (generic) */
+    CMD_STOP_ONESHOT_TIMER,             /**< Stop a one‑shot timer (generic) */
 
     /* --------------------------------------------------------
      * Maintenance commands – service mode control
      * -------------------------------------------------------- */
-    CMD_ENTER_MAINTENANCE_MODE, /**< Switch to maintenance state */
-    CMD_EXIT_MAINTENANCE_MODE,  /**< Leave maintenance state */
-    CMD_RESET_STATISTICS,       /**< Clear operational counters */
+    CMD_ENTER_MAINTENANCE_MODE,         /**< Switch to maintenance state */
+    CMD_EXIT_MAINTENANCE_MODE,          /**< Leave maintenance state */
+    CMD_RESET_STATISTICS,               /**< Clear operational counters */
 
     /* --------------------------------------------------------
      * Power management commands

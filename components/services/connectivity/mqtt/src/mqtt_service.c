@@ -26,16 +26,24 @@
 #include "mqtt_topic.h"
 #include "service_interfaces.h"
 #include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_efuse.h"
 #include "command_params.h"
 #include <string.h>
 
-static const char* TAG = "mqtt_service";
+
+#define CONFIG_MQTT_BROKER_URI  "mqtt://102.223.8.140:1883"
+#define CONFIG_MQTT_USERNAME    "mqtt_user"
+#define CONFIG_MQTT_PASSWORD    "ega12345"
 
 /* Default configuration values (used if no command overrides) */
 #define MQTT_DEFAULT_MIN_RETRY_MS   2000
 #define MQTT_DEFAULT_MAX_RETRY_MS   60000
 #define MQTT_DEFAULT_MAX_ATTEMPTS    5
 #define MQTT_DEFAULT_KEEPALIVE       120
+
+
+static const char* TAG = "mqtt_service";
 
 /* Static service context (single instance) */
 static struct mqtt_service_context s_ctx = {0};
@@ -169,11 +177,155 @@ esp_err_t mqtt_service_register_handlers(void)
     return ESP_OK;
 }
 
+#if 1 
+
 esp_err_t mqtt_service_start(void)
 {
+    /* Connect to MQTT broker */
+    uint8_t mac[6];
+    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+    char mac_str[13];
+    snprintf(mac_str, sizeof(mac_str), "%02x%02x%02x%02x%02x%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    char client_id[20];
+    snprintf(client_id, sizeof(client_id), "bin_%s", mac_str);
+
+    cmd_connect_mqtt_params_t mqtt_conn = {
+        .broker_uri = CONFIG_MQTT_BROKER_URI,
+        .client_id = "",
+        .username = CONFIG_MQTT_USERNAME,
+        .password = CONFIG_MQTT_PASSWORD,
+        .keepalive = 120,
+        .disable_clean_session = false,
+        .lwt_qos = 0,
+        .lwt_retain = false,
+        .lwt_topic = "",
+        .lwt_message = "",
+        .min_retry_delay_ms = 2000,
+        .max_retry_delay_ms = 30000,
+        .max_retry_attempts = 5
+    };
+    strlcpy(mqtt_conn.client_id, client_id, sizeof(mqtt_conn.client_id));
+    ESP_LOGI(TAG, "Connecting to MQTT broker...");
+    command_router_execute(CMD_CONNECT_MQTT, &mqtt_conn);
+
+    /* Initialize base topic (for debugging) */
+    char base_topic[32];
+    ESP_ERROR_CHECK(mqtt_topic_init(base_topic, sizeof(base_topic)));
+    ESP_LOGI(TAG, "Base topic: %s", base_topic);
+
     ESP_LOGI(TAG, "MQTT service started");
     return ESP_OK;
 }
+
+#else 
+esp_err_t mqtt_service_start(void)
+{
+     /* Read MAC address to create unique client ID */
+    uint8_t mac[6];
+    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+    char mac_str[13];
+    snprintf(mac_str, sizeof(mac_str), "%02x%02x%02x%02x%02x%02x",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    char client_id[20];
+    snprintf(client_id, sizeof(client_id), "bin_%s", mac_str);
+
+    cmd_connect_mqtt_params_t mqtt_conn = {
+        .broker_uri = CONFIG_MQTT_BROKER_URI,
+        .client_id = "",               /* temporary, will be overwritten */
+        .username = CONFIG_MQTT_USERNAME,
+        .password = CONFIG_MQTT_PASSWORD,
+        .keepalive = 120,
+        .disable_clean_session = false,
+        .lwt_qos = 0,
+        .lwt_retain = false,
+        .lwt_topic = "",
+        .lwt_message = "",
+        .min_retry_delay_ms = 2000,
+        .max_retry_delay_ms = 30000,
+        .max_retry_attempts = 5
+    };
+    strlcpy(mqtt_conn.client_id, client_id, sizeof(mqtt_conn.client_id));
+    ESP_LOGI(TAG, "Connecting to MQTT broker...");
+    command_router_execute(CMD_CONNECT_MQTT, &mqtt_conn);
+
+    /* Allow time for connection */
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    ESP_LOGI(TAG, "MQTT service started");
+
+    /**< Initialize base topic */
+    char base_topic[32];
+    ESP_ERROR_CHECK(mqtt_topic_init(base_topic, sizeof(base_topic)));
+    ESP_LOGI(TAG, "\n\tBase topic: %s", base_topic);
+
+    /* Subscribe to devices/<mac>/cmd */
+    char sub_topic_cmd[128];
+    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_cmd, sizeof(sub_topic_cmd), "cmd"));
+    cmd_subscribe_mqtt_params_t sub_cmd = {
+        .topic = "",
+        .qos = 1
+    };
+    strlcpy(sub_cmd.topic, sub_topic_cmd, sizeof(sub_cmd.topic));
+    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_cmd);
+    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_cmd);
+
+    /* Subscribe to devices/<mac>/cmd/test */
+    char sub_topic_cmd_test[128];
+    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_cmd_test, sizeof(sub_topic_cmd_test), "cmd/test"));
+    cmd_subscribe_mqtt_params_t sub_cmd_test = {
+        .topic = "",
+        .qos = 1
+    };
+    strlcpy(sub_cmd_test.topic, sub_topic_cmd_test, sizeof(sub_cmd_test.topic));
+    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_cmd_test);
+    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_cmd_test);
+
+    /* Subscribe to devices/<mac>/cmd/register */
+    char sub_topic_register[128];
+    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_register, sizeof(sub_topic_register), "cmd/register"));
+    cmd_subscribe_mqtt_params_t sub_register = {
+        .topic = "",
+        .qos = 1
+    };
+    strlcpy(sub_register.topic, sub_topic_register, sizeof(sub_register.topic));
+    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_register);
+    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_register);
+
+    /* Publish to devices/<mac>/status/online */
+    char pub_topic_online_status[128];
+    ESP_ERROR_CHECK(mqtt_topic_build(pub_topic_online_status, sizeof(pub_topic_online_status), "status/online"));
+    cmd_publish_mqtt_params_t pub_status = {
+        .topic = "",
+        .payload = "online",
+        .payload_len = strlen("online"),
+        .qos = 1,
+        .retain = true
+    };
+    strlcpy(pub_status.topic, pub_topic_online_status, sizeof(pub_status.topic));
+    ESP_LOGI(TAG, "Publishing %s", pub_topic_online_status);
+    command_router_execute(CMD_PUBLISH_MQTT, &pub_status);
+
+    /* Publish to devices/<mac>/data */
+    char pub_topic_data[128];
+    ESP_ERROR_CHECK(mqtt_topic_build(pub_topic_data, sizeof(pub_topic_data), "data"));
+    cmd_publish_mqtt_params_t pub_data = {
+        .topic = "",
+        .payload = "real data payload",
+        .payload_len = strlen("real data payload"),
+        .qos = 1,
+        .retain = true
+    };
+    strlcpy(pub_data.topic, pub_topic_data, sizeof(pub_data.topic));
+    ESP_LOGI(TAG, "Publishing %s", pub_topic_data);
+    command_router_execute(CMD_PUBLISH_MQTT, &pub_data);
+
+    return ESP_OK;
+}
+
+#endif
 
 /*============================================================================
  * Command handlers (called by command router)
@@ -319,6 +471,46 @@ static void mqtt_service_task(void *pvParameters)
     }
 }
 
+static void attempt_connect(void)
+{
+    /* Use stored config to connect (already set from previous CMD_CONNECT_MQTT) */
+    mqtt_client_config_t client_cfg = {
+        .broker_uri = s_ctx.config.broker_uri,
+        .client_id = s_ctx.config.client_id[0] ? s_ctx.config.client_id : NULL,
+        .username = s_ctx.config.username[0] ? s_ctx.config.username : NULL,
+        .password = s_ctx.config.password[0] ? s_ctx.config.password : NULL,
+        .keepalive = s_ctx.config.keepalive,
+        .disable_clean_session = s_ctx.config.disable_clean_session,
+        .lwt_qos = s_ctx.config.lwt_qos,
+        .lwt_retain = s_ctx.config.lwt_retain,
+        .lwt_topic = s_ctx.config.lwt_topic[0] ? s_ctx.config.lwt_topic : NULL,
+        .lwt_message = s_ctx.config.lwt_message[0] ? s_ctx.config.lwt_message : NULL,
+        .task_stack_size = 0,
+        .task_priority = 0
+    };
+
+    mqtt_client_stop();  /* safe to call even if not started */
+    esp_err_t err = mqtt_client_init(&client_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init MQTT client: %s", esp_err_to_name(err));
+        set_state(MQTT_STATE_FAILED);
+        mqtt_event_connection_failed_t evt = { .attempts = s_ctx.retry_count + 1 };
+        emit_event(EVENT_MQTT_CONNECTION_FAILED, &evt);
+        return;
+    }
+
+    set_state(MQTT_STATE_CONNECTING);
+    emit_event(EVENT_MQTT_CONNECTING, NULL);
+
+    err = mqtt_client_start();
+    if (err != ESP_OK) {
+        s_ctx.retry_count++;
+        set_state(MQTT_STATE_FAILED);
+        mqtt_event_connection_failed_t evt = { .attempts = s_ctx.retry_count };
+        emit_event(EVENT_MQTT_CONNECTION_FAILED, &evt);
+    }
+}
+
 /*============================================================================
  * Command Processing
  *============================================================================*/
@@ -352,7 +544,7 @@ static void process_command(const command_msg_t *cmd)
 
             /* If WiFi not connected, stay in IDLE (will be triggered when WiFi becomes available) */
             if (!s_ctx.wifi_connected) {
-                ESP_LOGD(TAG, "WiFi not connected, deferring MQTT connect");
+                attempt_connect();
                 return;
             }
 
@@ -467,6 +659,11 @@ static void process_command(const command_msg_t *cmd)
         case CMD_MQTT_SET_WIFI_STATE:
             s_ctx.wifi_connected = (cmd->data.wifi_state != 0);
             ESP_LOGI(TAG, "WiFi state updated: %s", s_ctx.wifi_connected ? "connected" : "disconnected");
+
+            /* If WiFi just became connected and MQTT is idle or failed, attempt connect */
+            if (s_ctx.wifi_connected && (s_ctx.state == MQTT_STATE_IDLE || s_ctx.state == MQTT_STATE_FAILED)) {
+                attempt_connect();
+            }
             break;
 
         default:
@@ -664,7 +861,7 @@ static void emit_event(system_event_id_t event, void *data)
 {
     system_event_t ev = {
         .id = event,
-        .data = { {0} }
+        .data = { { {0} } }
     };
 
     switch (event) {

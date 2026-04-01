@@ -61,13 +61,13 @@ typedef enum {
     EVENT_INTENT_SENSOR_READ,         /**<  */
     EVENT_INTENT_SIGNAL_DETECTED,     /**< Intent sensor (radar/ultrasonic) triggered */
     EVENT_INTENT_TIMEOUT,             /**< Intent evaluation period expired */
-    EVENT_BIN_LEVEL_UPDATED,          /**< New fill level measurement available */
+    EVENT_FILL_LEVEL_UPDATED,       /**< New fill level measurement available */
 
     /* --------------------------------------------------------
      * Timer events (system timebase)
      * -------------------------------------------------------- */
     EVENT_PERIODIC_REPORT_TIMEOUT,    /**< Time to send periodic status */
-    EVENT_ONESHOT_REPORT_TIMEOUT,            /**< One‑shot timer expired (generic) */
+    EVENT_ONESHOT_REPORT_TIMEOUT,     /**< One‑shot timer expired (generic) */
     EVENT_ESCALATION_TIMEOUT,         /**< Escalation delay expired */
 
     /* --------------------------------------------------------
@@ -92,11 +92,15 @@ typedef enum {
     EVENT_GSM_READY,                 /**< GSM module ready after init */
     EVENT_GSM_COMMAND_RECEIVED,      /**< Authenticated SMS command received (payload: sender, command) */
 
+    EVENT_GPS_FIX_UPDATED,          /**< New GPS fix acquired */
+    EVENT_GPS_FIX_LOST,             /**< GPS fix lost */
+
     /* --------------------------------------------------------
      * Authentication & maintenance
      * -------------------------------------------------------- */
     EVENT_AUTH_GRANTED,              /**< SMS authentication succeeded */
     EVENT_AUTH_DENIED,               /**< SMS authentication failed */
+    EVENT_MAINTENANCE_COMPLETED,     /**< Maintenance task finished successfully */
 
     /* --------------------------------------------------------
      * Intent validation results
@@ -126,6 +130,7 @@ typedef enum {
      * -------------------------------------------------------- */
     EVENT_SYSTEM_RESTARTED,         /**< System reboot completed */
     EVENT_SYSTEM_ERROR_DETECTED,    /**< Critical fault observed */
+    EVENT_SYSTEM_ERROR_DETECTED_RECOVERED,  /**< Recovery from critical fault observed */
 
     /* --------------------------------------------------------
      * Bin-to-bin communication
@@ -138,6 +143,13 @@ typedef enum {
     EVENT_GPS_COORDINATES_UPDATED,  /**< New GPS fix acquired */
 
     EVENT_REDIRECT_TO_BIN,           /**< System should redirect user to another bin (payload: redirect_info_t) */
+
+
+
+    /* --------------------------------------------------------
+     * Sensor failure
+     * -------------------------------------------------------- */
+    EVENT_SENSOR_FAILURE,           /**< Critical sensor malfunction detected */
 
     /* --------------------------------------------------------
      * Power management
@@ -154,6 +166,40 @@ typedef enum {
  * Each event type may carry associated observation data.
  * Payload is zero-initialized before posting; unused fields are ignored.
  * ============================================================ */
+
+typedef struct {
+    uint8_t sender_mac[6];      /**< MAC address of peer bin */
+    uint8_t fill_level_percent; /**< Peer's fill level */
+    gps_coordinates_t location; /**< Peer's GPS coordinates */
+} neighbor_status_t;
+
+typedef struct {
+    char sender[16];
+    char command[161];
+} gsm_command_t;
+
+typedef struct {
+    char sender[16];
+    char message[161];
+} gsm_sms_t;
+
+typedef struct {
+    gps_coordinates_t coordinates; /**< Latitude, longitude, altitude */
+} gps_update_t;
+
+typedef struct {
+    uint8_t error_code;          /**< System-specific error code */
+} system_error_t;
+
+/* Servo event payload */
+typedef struct {
+    servo_id_t servo_id;
+    float final_angle;
+} servo_event_t;
+
+typedef struct {
+    uint16_t distance_cm;   /**< Measured distance in centimeters */
+} intent_sensor_t;
 
  // Payload structures for WiFi events
 typedef struct {
@@ -188,45 +234,38 @@ typedef struct {
 } redirect_info_t;
 
 typedef struct {
-    system_event_id_t id;           /**< Event type – MUST be first field */
+    bool valid;                /**< true if fix is usable */
+    double latitude;            /**< decimal degrees, positive north */
+    double longitude;           /**< decimal degrees, positive east */
+    float altitude_m;           /**< meters above sea level */
+    float hdop;                 /**< horizontal dilution of precision */
+    float speed_kmh;            /**< ground speed in km/h */
+    uint8_t satellites;         /**< number of satellites used */
+    uint64_t timestamp_ms;      /**< system time when fix was obtained (ms) */
+} gps_fix_t;
+
+typedef struct {
+    uint8_t fill_percent;           /**< 0-100% fill level */
+    // data_validity_t validity;
+} fill_level_data_t;
+
+typedef struct {
+    system_event_id_t id;               /**< Event type – MUST be first field */
+    uint64_t timestamp_us;              /**< Microsecond timestamp (producer time) */
+    uint8_t source;                     /**< Event source identifier (optional) */
+    
     union {
-        struct {
-            uint8_t fill_level_percent; /**< 0-100% fill level */
-        } bin_level;
+        neighbor_status_t neighbor_status;
 
-        struct {
-            uint8_t sender_mac[6];      /**< MAC address of peer bin */
-            uint8_t fill_level_percent; /**< Peer's fill level */
-            gps_coordinates_t location; /**< Peer's GPS coordinates */
-        } neighbor_status;
+        gsm_command_t gsm_command;
+        gsm_sms_t gsm_sms;
+        gps_update_t gps_update;
 
-        struct {
-            char sender[16];
-            char command[161];
-        } gsm_command;
-
-        struct {
-            char sender[16];
-            char message[161];
-        } gsm_sms;
-
-        struct {
-            gps_coordinates_t coordinates; /**< Latitude, longitude, altitude */
-        } gps_update;
-
-        struct {
-            uint8_t error_code;          /**< System-specific error code */
-        } system_error;
-
+        system_error_t system_error;
         /* Servo event payload */
-        struct {
-            servo_id_t servo_id;
-            float final_angle;
-        } servo_event;
+        servo_event_t servo_event;
 
-        struct {
-            uint16_t distance_cm;   /**< Measured distance in centimeters */
-        } intent_sensor;
+        intent_sensor_t intent_sensor;
 
         wifi_event_disconnected_t wifi_disconnected;
         wifi_event_connection_failed_t wifi_connection_failed;
@@ -236,8 +275,11 @@ typedef struct {
         mqtt_event_disconnected_t mqtt_disconnected;
         mqtt_event_connection_failed_t mqtt_connection_failed;
         mqtt_message_t mqtt_message;
-
         redirect_info_t redirect_info;
+
+        gps_fix_t gps_fix;
+
+        fill_level_data_t fill_level;
 
         /* Reserved for future expansion – always zero */
         struct {

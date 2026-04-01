@@ -171,6 +171,39 @@ typedef struct {
     uint8_t fill_level_percent;
 } cmd_bin_net_level_update_t;
 
+typedef struct {
+    char topic[128];                /**< MQTT topic */
+    uint8_t payload[512];           /**< Command payload (JSON) */
+    size_t payload_len;             /**< Payload length */
+} web_command_params_t;
+
+typedef struct {
+    uint8_t sensor_id;  /* 0 = fill, 1 = intent */
+} cmd_read_sensor_params_t;
+
+/* LED command parameters */
+typedef struct {
+    uint8_t led_id;         /**< LED index (0..LED_COUNT-1) */
+} led_id_params_t;
+
+typedef struct {
+    uint8_t led_id;         /**< LED index */
+    uint8_t percent;        /**< Brightness 0‑100 */
+} led_brightness_params_t;
+
+typedef struct {
+    uint8_t led_id;         /**< LED index */
+    uint32_t period_ms;     /**< Blink period (ms) */
+    uint8_t duty_percent;   /**< Duty cycle (0‑100) */
+} led_blink_params_t;
+
+typedef struct {
+    uint8_t led_id;              /**< LED index */
+    uint8_t target_percent;      /**< Target brightness */
+    uint32_t duration_ms;        /**< Fade duration (ms) */
+} led_fade_params_t;
+
+
 /* For CMD_MQTT_SET_WIFI_STATE, we can use the generic status_value field.
  * No new struct needed, but we need a way to pass a boolean. The command
  * router passes a void*; we can cast a uint32_t. For clarity, define:
@@ -198,6 +231,12 @@ typedef union {
     cmd_publish_mqtt_params_t         publish_mqtt;
     cmd_subscribe_mqtt_params_t       subscribe_mqtt;
     cmd_unsubscribe_mqtt_params_t     unsubscribe_mqtt;
+    cmd_read_sensor_params_t          read_sensor;
+    web_command_params_t              web_cmd;
+    led_id_params_t                   led_id;
+    led_brightness_params_t           led_brightness;
+    led_blink_params_t                led_blink;
+    led_fade_params_t                 led_fade;
 } command_param_union_t;
 
 #ifdef __cplusplus

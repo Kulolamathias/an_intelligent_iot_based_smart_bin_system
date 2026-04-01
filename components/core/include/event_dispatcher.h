@@ -52,6 +52,12 @@ extern "C" {
 esp_err_t event_dispatcher_init(void);
 
 /**
+ * @brief Start the event dispatcher task.
+ * @return ESP_OK on success, error otherwise.
+ */
+esp_err_t event_dispatcher_start(void);
+
+/**
  * @brief Post event from task context.
  * 
  * Copies event into queue. Returns ESP_FAIL if queue is full.

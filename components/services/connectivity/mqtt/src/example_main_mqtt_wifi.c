@@ -1,5 +1,6 @@
 /**
- * @file main.c
+ * @file main.c //this i just kept the name to avoid build issues, but it should be renamed to example_main_mqtt_wifi.c
+ * @brief Example application demonstrating WiFi and MQTT services integration.
  * @brief Integration Test for WiFi and MQTT Services
  *
  * =============================================================================

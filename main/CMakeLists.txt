@@ -6,6 +6,7 @@ idf_component_register(
     REQUIRES 
         core
         services
+        driver
         config
         utils
         tests

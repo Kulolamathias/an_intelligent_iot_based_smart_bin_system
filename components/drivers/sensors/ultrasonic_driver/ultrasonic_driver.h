@@ -1,3 +1,5 @@
+#if 0
+
 /**
  * @file ultrasonic_driver.h
  * @brief Ultrasonic sensor driver – instance-based hardware abstraction.
@@ -73,3 +75,44 @@ esp_err_t ultrasonic_driver_delete(ultrasonic_handle_t handle);
 #endif
 
 #endif /* ULTRASONIC_DRIVER_H */
+
+
+#else
+
+/**
+ * @file ultrasonic_driver.h
+ * @brief Ultrasonic sensor driver – interrupt‑based, multiple instances.
+ *        Compatible with the smart bin handle‑based API.
+ */
+
+#ifndef ULTRASONIC_DRIVER_H
+#define ULTRASONIC_DRIVER_H
+
+#include "driver/gpio.h"
+#include "esp_err.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct ultrasonic_handle_t *ultrasonic_handle_t;
+
+typedef struct {
+    gpio_num_t trig_pin;      /**< Trigger GPIO (output) */
+    gpio_num_t echo_pin;      /**< Echo GPIO (input, with interrupt) */
+    uint32_t timeout_us;      /**< Max echo wait time in microseconds */
+} ultrasonic_config_t;
+
+esp_err_t ultrasonic_driver_create(const ultrasonic_config_t *cfg,
+                                   ultrasonic_handle_t *out_handle);
+esp_err_t ultrasonic_driver_measure(ultrasonic_handle_t handle,
+                                    uint32_t *pulse_width_us);
+esp_err_t ultrasonic_driver_delete(ultrasonic_handle_t handle);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ULTRASONIC_DRIVER_H */
+
+#endif

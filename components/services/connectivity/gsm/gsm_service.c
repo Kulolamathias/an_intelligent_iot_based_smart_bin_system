@@ -234,7 +234,7 @@ static void process_sms(const gsm_raw_sms_t *raw)
         ESP_LOGW(TAG, "Unauthorized sender: %s", raw->sender);
         // Optionally send failure notification? Not service's role.
         // Emit EVENT_AUTH_DENIED
-        system_event_t ev = { .id = EVENT_AUTH_DENIED, .data = { {0} } };
+        system_event_t ev = { .id = EVENT_AUTH_DENIED, .data = { { {0} } } };
         service_post_event(&ev);
         return;
     }
@@ -242,13 +242,13 @@ static void process_sms(const gsm_raw_sms_t *raw)
     // 2. Check password presence
     if (!contains_password(raw->message)) {
         ESP_LOGW(TAG, "Invalid password in message");
-        system_event_t ev = { .id = EVENT_AUTH_DENIED, .data = { {0} } };
+        system_event_t ev = { .id = EVENT_AUTH_DENIED, .data = { { {0} } } };
         service_post_event(&ev);
         return;
     }
 
     // 3. Authorized and password OK – emit granted event
-    system_event_t auth_ev = { .id = EVENT_AUTH_GRANTED, .data = { {0} } };
+    system_event_t auth_ev = { .id = EVENT_AUTH_GRANTED, .data = { { {0} } } };
     service_post_event(&auth_ev);
 
     // 4. Extract command part (everything after password? We'll just forward full message)
@@ -340,7 +340,7 @@ static void send_sms_task(void *arg)
             }
             if (!gsm_driver_is_registered()) {
                 ESP_LOGE(TAG, "Network not registered, SMS send failed");
-                system_event_t ev = { .id = EVENT_GSM_SMS_FAILED, .data = { {0} } };
+                system_event_t ev = { .id = EVENT_GSM_SMS_FAILED, .data = { { {0} } } };
                 service_post_event(&ev);
                 continue;
             }
@@ -348,7 +348,7 @@ static void send_sms_task(void *arg)
             esp_err_t ret = gsm_driver_send_sms(sms.number, sms.message, 60000);
             system_event_t ev = {
                 .id = (ret == ESP_OK) ? EVENT_GSM_SMS_SENT : EVENT_GSM_SMS_FAILED,
-                .data = { {0} }
+                .data = { { {0} } }
             };
             service_post_event(&ev);
         }

@@ -1,72 +1,64 @@
 /**
- * @file servo_driver.h
- * @brief Servo motor driver – instance-based PWM abstraction.
+ * @file components/drivers/actuators/servo_driver/servo_driver.h
+ * @brief Servo Driver – hardware abstraction for PWM‑controlled servos (MG995).
  *
  * =============================================================================
  * ARCHITECTURAL ROLE
  * =============================================================================
- * This driver provides a handle-based interface to individual servo motors
- * using the ESP‑IDF LEDC PWM peripheral.
+ * This driver provides a handle‑based interface to individual servo motors.
+ * It uses the ESP‑IDF LEDC (PWM) peripheral to generate the control signal.
  *
- * It contains NO motion logic, NO sequences, and NO business policy.
+ * It contains NO business logic, NO command handling, and NO event posting.
  * =============================================================================
  */
 
 #ifndef SERVO_DRIVER_H
 #define SERVO_DRIVER_H
 
-#include "driver/gpio.h"
-#include "driver/ledc.h"
 #include "esp_err.h"
-
+#include "driver/ledc.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * Opaque handle representing a servo instance.
- */
+/** Opaque handle representing a servo instance. */
 typedef struct servo_handle_t *servo_handle_t;
 
 /**
- * @brief Configuration for creating a servo instance.
+ * @brief Servo configuration structure.
  */
 typedef struct {
-    gpio_num_t pwm_pin;               /**< GPIO connected to servo signal */
-    ledc_timer_t timer;                /**< LEDC timer ID (e.g., LEDC_TIMER_0) */
-    ledc_channel_t channel;            /**< LEDC channel ID (e.g., LEDC_CHANNEL_0) */
-    uint32_t pwm_frequency_hz;         /**< Typically 50 Hz for standard servos */
-    uint32_t min_pulse_width_us;       /**< Pulse width corresponding to 0° (e.g., 500) */
-    uint32_t max_pulse_width_us;       /**< Pulse width corresponding to 180° (e.g., 2500) */
+    gpio_num_t gpio_num;        /**< GPIO pin for PWM signal */
+    ledc_channel_t channel;     /**< LEDC channel (0..7) */
+    ledc_timer_t timer;         /**< LEDC timer (LEDC_TIMER_0..3) */
+    uint32_t min_pulse_us;      /**< Pulse width for 0° (typically 500 µs) */
+    uint32_t max_pulse_us;      /**< Pulse width for 180° (typically 2500 µs) */
+    uint32_t freq_hz;           /**< PWM frequency (50 Hz for standard servos) */
 } servo_config_t;
 
 /**
  * @brief Create a servo instance.
  *
- * @param config      Configuration structure.
- * @param out_handle  Pointer to store the created handle.
- * @return ESP_OK on success, otherwise an error code.
+ * @param cfg   Configuration (pins, channel, timer, pulse limits).
+ * @param out_handle Pointer to store the created handle.
+ * @return ESP_OK on success, error code otherwise.
  */
-esp_err_t servo_driver_create(const servo_config_t *config,
-                              servo_handle_t *out_handle);
+esp_err_t servo_driver_create(const servo_config_t *cfg, servo_handle_t *out_handle);
 
 /**
- * @brief Set servo angle (0–180 degrees).
+ * @brief Set servo angle (blocking, waits for PWM to be applied).
  *
- * @param handle     Instance handle.
- * @param angle_deg  Desired angle (clamped to [0, 180]).
- * @return ESP_OK on success.
+ * @param handle Servo instance handle.
+ * @param angle_deg Target angle in degrees (0..180).
+ * @return ESP_OK on success, error if handle invalid or angle out of range.
  */
-esp_err_t servo_driver_set_angle(servo_handle_t handle,
-                                  float angle_deg);
+esp_err_t servo_driver_set_angle(servo_handle_t handle, float angle_deg);
 
 /**
- * @brief Stop PWM output (servo enters high‑impedance / hold?).
- *        Some servos may coast; others hold last position.
- *        This function disables the PWM signal.
+ * @brief Stop the servo (set PWM duty cycle to 0, releasing the signal).
  *
- * @param handle Instance handle.
+ * @param handle Servo instance handle.
  * @return ESP_OK on success.
  */
 esp_err_t servo_driver_stop(servo_handle_t handle);
@@ -74,7 +66,7 @@ esp_err_t servo_driver_stop(servo_handle_t handle);
 /**
  * @brief Delete a servo instance and free resources.
  *
- * @param handle Instance handle.
+ * @param handle Servo instance handle.
  * @return ESP_OK on success.
  */
 esp_err_t servo_driver_delete(servo_handle_t handle);
