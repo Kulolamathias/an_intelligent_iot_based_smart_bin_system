@@ -1,5 +1,5 @@
 /**
- * @file mqtt_private.h
+ * @file components/services/connectivity/mqtt/include/mqtt_private.h
  * @brief Private definitions for the MQTT Service (internal use only)
  *
  * =============================================================================

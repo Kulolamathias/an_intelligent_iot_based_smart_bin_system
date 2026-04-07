@@ -1,5 +1,5 @@
 /**
- * @file mqtt_client_abstraction.h
+ * @file components/services/connectivity/mqtt/include/mqtt_client_abstraction.h
  * @brief MQTT Client Abstraction – Transport‑only Wrapper for ESP‑MQTT
  *
  * =============================================================================

@@ -1,5 +1,5 @@
 /**
- * @file mqtt_client_abstraction.c
+ * @file components/services/connectivity/mqtt/src/mqtt_client_abstraction.c
  * @brief Implementation of the MQTT client abstraction.
  *
  * =============================================================================

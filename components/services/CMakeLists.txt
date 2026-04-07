@@ -62,6 +62,7 @@ idf_component_register(
     REQUIRES 
         core
         drivers
+        common_utils
         mqtt
         esp_timer
         nvs_flash

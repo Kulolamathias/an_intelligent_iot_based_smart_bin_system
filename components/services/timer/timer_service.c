@@ -1,5 +1,5 @@
 /**
- * @file timer_service.c
+ * @file components/services/timer/timer_service.c
  * @brief Timer Service – using ESP timers (esp_timer).
  *
  * =============================================================================

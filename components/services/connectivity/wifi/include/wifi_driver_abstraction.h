@@ -1,5 +1,5 @@
 /**
- * @file wifi_driver_abstraction.h
+ * @file components/services/connectivity/wifi/include/wifi_driver_abstraction.h
  * @brief WiFi Driver Abstraction – Low‑level Wrapper for ESP‑IDF WiFi
  *
  * =============================================================================

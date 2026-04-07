@@ -1,5 +1,5 @@
 /**
- * @file mqtt_service.h
+ * @file components/services/connectivity/mqtt/include/mqtt_service.h
  * @brief MQTT Service – Manages MQTT Connection Lifecycle
  *
  * =============================================================================

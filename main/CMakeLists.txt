@@ -8,7 +8,7 @@ idf_component_register(
         services
         driver
         config
-        utils
+        common_utils
         tests
         esp_event
         efuse

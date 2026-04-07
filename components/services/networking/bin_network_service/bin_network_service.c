@@ -1,5 +1,5 @@
 /**
- * @file bin_network_service.c
+ * @file components/services/networking/bin_network_service/bin_network_service.c
  * @brief Implementation of the bin network service.
  *
  * =============================================================================
@@ -21,6 +21,7 @@
 
 #include "bin_network_service.h"
 #include "mqtt_topic.h"
+#include "gps_service.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -407,6 +408,12 @@ static void publish_heartbeat(void)
     char json[JSON_BUFFER_SIZE];
     uint32_t now = get_current_timestamp();
 
+    /* Get GPS fix from GPS service */
+    gps_data_t gps;
+    bool fix = gps_service_get_last_fix(&gps);
+    float lat = fix ? (float)gps.latitude : 0.0f;
+    float lon = fix ? (float)gps.longitude : 0.0f;
+
     snprintf(json, sizeof(json),
              "{"
              "\"id\":\"%s\","
@@ -417,11 +424,8 @@ static void publish_heartbeat(void)
              "\"status\":\"%s\","
              "\"timestamp\":%lu"
              "}",
-             s_ctx.own_id,
-             s_ctx.own_latitude,
-             s_ctx.own_longitude,
-             s_ctx.own_fill_percent,
-             s_ctx.own_capacity,
+             s_ctx.own_id, lat, lon,
+             s_ctx.own_fill_percent, s_ctx.own_capacity,
              s_ctx.own_fill_percent >= 100 ? "FULL" : "AVAILABLE",
              (unsigned long)now);
 
@@ -442,6 +446,12 @@ static void publish_state(void)
     char json[JSON_BUFFER_SIZE];
     uint32_t now = get_current_timestamp();
 
+    /* Get GPS fix from GPS service */
+    gps_data_t gps;
+    bool fix = gps_service_get_last_fix(&gps);
+    float lat = fix ? (float)gps.latitude : 0.0f;
+    float lon = fix ? (float)gps.longitude : 0.0f;
+
     snprintf(json, sizeof(json),
              "{"
              "\"fill\":%u,"
@@ -450,10 +460,8 @@ static void publish_state(void)
              "\"lon\":%.6f,"
              "\"timestamp\":%lu"
              "}",
-             s_ctx.own_fill_percent,
-             s_ctx.own_capacity,
-             s_ctx.own_latitude,
-             s_ctx.own_longitude,
+             s_ctx.own_fill_percent, s_ctx.own_capacity,
+             lat, lon,
              (unsigned long)now);
 
     char topic[64];
@@ -475,6 +483,12 @@ static void publish_cloud_heartbeat(void)
     char json[JSON_BUFFER_SIZE];
     uint32_t now = get_current_timestamp();
 
+    /* Get GPS fix from GPS service */
+    gps_data_t gps;
+    bool fix = gps_service_get_last_fix(&gps);
+    float lat = fix ? (float)gps.latitude : 0.0f;
+    float lon = fix ? (float)gps.longitude : 0.0f;
+
     snprintf(json, sizeof(json),
              "{"
              "\"fill\":%u,"
@@ -482,9 +496,7 @@ static void publish_cloud_heartbeat(void)
              "\"lon\":%.6f,"
              "\"timestamp\":%lu"
              "}",
-             s_ctx.own_fill_percent,
-             s_ctx.own_latitude,
-             s_ctx.own_longitude,
+             s_ctx.own_fill_percent, lat, lon,
              (unsigned long)now);
 
     char topic[64];

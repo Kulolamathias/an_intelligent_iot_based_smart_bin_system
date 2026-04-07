@@ -1,5 +1,5 @@
 /**
- * @file wifi_service.c
+ * @file components/services/connectivity/wifi/src/wifi_service.c
  * @brief Implementation of the WiFi Service.
  *
  * =============================================================================

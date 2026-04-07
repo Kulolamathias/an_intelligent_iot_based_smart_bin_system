@@ -44,7 +44,9 @@
 #ifndef GPS_SERVICE_H
 #define GPS_SERVICE_H
 
+#include <stdbool.h>
 #include "esp_err.h"
+#include "gps_types.h"
 
 #ifdef __cplusplus
 extern "C" {

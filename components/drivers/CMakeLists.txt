@@ -27,7 +27,7 @@ idf_component_register(
         "comms/gps"
 
     REQUIRES
-        utils
+        common_utils
         driver
         freertos
         esp_timer       

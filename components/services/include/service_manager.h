@@ -1,5 +1,5 @@
 /**
- * @file service_manager.h
+ * @file components/services/include/service_manager.h
  * @brief Service Manager – orchestrates deterministic service startup.
  *
  * =============================================================================

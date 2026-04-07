@@ -1,5 +1,5 @@
 /**
- * @file mqtt_topic.c
+ * @file components/services/connectivity/mqtt/src/mqtt_topic.c
  * @brief Implementation of MQTT topic builder.
  *
  * =============================================================================

@@ -1,5 +1,5 @@
 /**
- * @file wifi_driver_abstraction.c
+ * @file components/services/connectivity/wifi/src/wifi_driver_abstraction.c
  * @brief Implementation of the WiFi driver abstraction.
  *
  * =============================================================================

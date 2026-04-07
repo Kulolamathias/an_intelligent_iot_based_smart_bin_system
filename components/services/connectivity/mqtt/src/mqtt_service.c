@@ -1,5 +1,5 @@
 /**
- * @file mqtt_service.c
+ * @file components/services/connectivity/mqtt/src/mqtt_service.c
  * @brief Implementation of the MQTT Service.
  *
  * =============================================================================
@@ -177,8 +177,6 @@ esp_err_t mqtt_service_register_handlers(void)
     return ESP_OK;
 }
 
-#if 1 
-
 esp_err_t mqtt_service_start(void)
 {
     /* Connect to MQTT broker */
@@ -218,114 +216,6 @@ esp_err_t mqtt_service_start(void)
     ESP_LOGI(TAG, "MQTT service started");
     return ESP_OK;
 }
-
-#else 
-esp_err_t mqtt_service_start(void)
-{
-     /* Read MAC address to create unique client ID */
-    uint8_t mac[6];
-    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
-    char mac_str[13];
-    snprintf(mac_str, sizeof(mac_str), "%02x%02x%02x%02x%02x%02x",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-    char client_id[20];
-    snprintf(client_id, sizeof(client_id), "bin_%s", mac_str);
-
-    cmd_connect_mqtt_params_t mqtt_conn = {
-        .broker_uri = CONFIG_MQTT_BROKER_URI,
-        .client_id = "",               /* temporary, will be overwritten */
-        .username = CONFIG_MQTT_USERNAME,
-        .password = CONFIG_MQTT_PASSWORD,
-        .keepalive = 120,
-        .disable_clean_session = false,
-        .lwt_qos = 0,
-        .lwt_retain = false,
-        .lwt_topic = "",
-        .lwt_message = "",
-        .min_retry_delay_ms = 2000,
-        .max_retry_delay_ms = 30000,
-        .max_retry_attempts = 5
-    };
-    strlcpy(mqtt_conn.client_id, client_id, sizeof(mqtt_conn.client_id));
-    ESP_LOGI(TAG, "Connecting to MQTT broker...");
-    command_router_execute(CMD_CONNECT_MQTT, &mqtt_conn);
-
-    /* Allow time for connection */
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    ESP_LOGI(TAG, "MQTT service started");
-
-    /**< Initialize base topic */
-    char base_topic[32];
-    ESP_ERROR_CHECK(mqtt_topic_init(base_topic, sizeof(base_topic)));
-    ESP_LOGI(TAG, "\n\tBase topic: %s", base_topic);
-
-    /* Subscribe to devices/<mac>/cmd */
-    char sub_topic_cmd[128];
-    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_cmd, sizeof(sub_topic_cmd), "cmd"));
-    cmd_subscribe_mqtt_params_t sub_cmd = {
-        .topic = "",
-        .qos = 1
-    };
-    strlcpy(sub_cmd.topic, sub_topic_cmd, sizeof(sub_cmd.topic));
-    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_cmd);
-    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_cmd);
-
-    /* Subscribe to devices/<mac>/cmd/test */
-    char sub_topic_cmd_test[128];
-    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_cmd_test, sizeof(sub_topic_cmd_test), "cmd/test"));
-    cmd_subscribe_mqtt_params_t sub_cmd_test = {
-        .topic = "",
-        .qos = 1
-    };
-    strlcpy(sub_cmd_test.topic, sub_topic_cmd_test, sizeof(sub_cmd_test.topic));
-    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_cmd_test);
-    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_cmd_test);
-
-    /* Subscribe to devices/<mac>/cmd/register */
-    char sub_topic_register[128];
-    ESP_ERROR_CHECK(mqtt_topic_build(sub_topic_register, sizeof(sub_topic_register), "cmd/register"));
-    cmd_subscribe_mqtt_params_t sub_register = {
-        .topic = "",
-        .qos = 1
-    };
-    strlcpy(sub_register.topic, sub_topic_register, sizeof(sub_register.topic));
-    ESP_LOGI(TAG, "Subscribing to %s", sub_topic_register);
-    command_router_execute(CMD_SUBSCRIBE_MQTT, &sub_register);
-
-    /* Publish to devices/<mac>/status/online */
-    char pub_topic_online_status[128];
-    ESP_ERROR_CHECK(mqtt_topic_build(pub_topic_online_status, sizeof(pub_topic_online_status), "status/online"));
-    cmd_publish_mqtt_params_t pub_status = {
-        .topic = "",
-        .payload = "online",
-        .payload_len = strlen("online"),
-        .qos = 1,
-        .retain = true
-    };
-    strlcpy(pub_status.topic, pub_topic_online_status, sizeof(pub_status.topic));
-    ESP_LOGI(TAG, "Publishing %s", pub_topic_online_status);
-    command_router_execute(CMD_PUBLISH_MQTT, &pub_status);
-
-    /* Publish to devices/<mac>/data */
-    char pub_topic_data[128];
-    ESP_ERROR_CHECK(mqtt_topic_build(pub_topic_data, sizeof(pub_topic_data), "data"));
-    cmd_publish_mqtt_params_t pub_data = {
-        .topic = "",
-        .payload = "real data payload",
-        .payload_len = strlen("real data payload"),
-        .qos = 1,
-        .retain = true
-    };
-    strlcpy(pub_data.topic, pub_topic_data, sizeof(pub_data.topic));
-    ESP_LOGI(TAG, "Publishing %s", pub_topic_data);
-    command_router_execute(CMD_PUBLISH_MQTT, &pub_data);
-
-    return ESP_OK;
-}
-
-#endif
 
 /*============================================================================
  * Command handlers (called by command router)

@@ -1,5 +1,5 @@
 /**
- * @file mqtt_topic.h
+ * @file components/services/connectivity/mqtt/include/mqtt_topic.h
  * @brief MQTT Topic Abstraction – Device‑specific Topic Construction
  *
  * =============================================================================

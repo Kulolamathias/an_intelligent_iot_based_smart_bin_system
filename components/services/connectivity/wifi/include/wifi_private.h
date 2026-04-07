@@ -1,5 +1,5 @@
 /**
- * @file wifi_private.h
+ * @file components/services/connectivity/wifi/include/wifi_private.h
  * @brief Private definitions for the WiFi Service (internal use only)
  *
  * =============================================================================

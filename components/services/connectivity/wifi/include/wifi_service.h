@@ -1,5 +1,5 @@
 /**
- * @file wifi_service.h
+ * @file components/services/connectivity/wifi/include/wifi_service.h
  * @brief WiFi Service – Manages WiFi Connection Lifecycle
  *
  * =============================================================================

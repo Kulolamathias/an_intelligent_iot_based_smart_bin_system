@@ -18,6 +18,7 @@
 #include "command_params.h"
 #include "event_types.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -34,6 +35,10 @@ static const char *TAG = "GPS_SVC";
 #define GPS_TASK_PRIORITY          5
 #define MAX_KNOWN_LOCATIONS        32      /* Maximum entries in mapping table */
 #define GPS_DEFAULT_RADIUS_METERS  50      /* Default radius for location matching */
+
+#define GPS_TX_PIN 17
+#define GPS_RX_PIN 16
+#define     GPS_UART_NUM UART_NUM_2
 
 /* ============================================================
  * Internal command types for service queue
@@ -86,7 +91,7 @@ typedef struct {
     uint32_t known_count;
 } gps_ctx_t;
 
-static gps_ctx_t s_ctx = {0};
+static gps_ctx_t s_ctx = { { {0} } };
 
 /* ============================================================
  * Local static known location table (pre‑populated examples)
@@ -142,11 +147,11 @@ static const char* find_location_name(double lat, double lon)
  * ============================================================ */
 static void post_gps_fix(void)
 {
-    event_t ev = {
+    system_event_t ev = {
         .id = EVENT_GPS_FIX_UPDATED,
         .timestamp_us = esp_timer_get_time(),
         .source = 0,
-        .data = {0}
+        .data = { { {0} } }
     };
     ev.data.gps_fix.valid = s_ctx.fix_valid;
     ev.data.gps_fix.latitude = s_ctx.last_data.latitude;
@@ -165,11 +170,11 @@ static void post_gps_fix(void)
  * ============================================================ */
 static void post_gps_fix_lost(void)
 {
-    event_t ev = {
+    system_event_t ev = {
         .id = EVENT_GPS_FIX_LOST,
         .timestamp_us = esp_timer_get_time(),
         .source = 0,
-        .data = {0}
+        .data = { { {0} } }
     };
     service_post_event(&ev);
     ESP_LOGD(TAG, "GPS fix lost");
@@ -417,9 +422,9 @@ esp_err_t gps_service_init(void)
 
     /* Create GPS driver */
     gps_config_t cfg = {
-        .uart_num = UART_NUM_2,          /* Adjust to your hardware */
-        .tx_pin = GPIO_NUM_17,           /* GPS RX (to ESP TX) – adjust */
-        .rx_pin = GPIO_NUM_16,           /* GPS TX (to ESP RX) – adjust */
+        .uart_num = GPS_UART_NUM,          /* Adjust to your hardware */
+        .tx_pin = GPS_TX_PIN,           /* GPS RX (to ESP TX) – adjust */
+        .rx_pin = GPS_RX_PIN,           /* GPS TX (to ESP RX) – adjust */
         .baud_rate = 9600,
         .rx_buffer_size = 1024
     };
@@ -488,4 +493,11 @@ esp_err_t gps_service_stop(void)
     }
     ESP_LOGI(TAG, "GPS service stopped");
     return ESP_OK;
+}
+
+bool gps_service_get_last_fix(gps_data_t *data)
+{
+    if (!data) return false;
+    memcpy(data, &s_ctx.last_data, sizeof(gps_data_t));
+    return s_ctx.fix_valid;
 }

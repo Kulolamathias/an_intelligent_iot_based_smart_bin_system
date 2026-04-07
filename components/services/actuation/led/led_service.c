@@ -16,10 +16,10 @@ static const char *TAG = "LED_SVC";
 static led_handle_t s_leds[LED_COUNT] = {NULL};
 
 static const led_config_t s_led_configs[LED_COUNT] = {
-    { .gpio_num = GPIO_NUM_5,  .channel = LEDC_CHANNEL_0, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // white
+    { .gpio_num = GPIO_NUM_25,  .channel = LEDC_CHANNEL_0, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // white
     { .gpio_num = GPIO_NUM_18, .channel = LEDC_CHANNEL_1, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // green
     { .gpio_num = GPIO_NUM_19, .channel = LEDC_CHANNEL_2, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // yellow
-    { .gpio_num = GPIO_NUM_33, .channel = LEDC_CHANNEL_3, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // red
+    { .gpio_num = GPIO_NUM_26, .channel = LEDC_CHANNEL_3, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // red
     { .gpio_num = GPIO_NUM_32, .channel = LEDC_CHANNEL_4, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // blue
 };
 

@@ -1,5 +1,5 @@
 /**
- * @file service_interfaces.h
+ * @file components/services/include/service_interfaces.h
  * @brief Common service infrastructure – base contract and safe wrappers.
  *
  * =============================================================================

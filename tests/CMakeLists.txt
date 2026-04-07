@@ -8,6 +8,6 @@ idf_component_register(
     REQUIRES 
         core 
         services
-
+        common_utils
         efuse
 )

@@ -1,5 +1,5 @@
 /**
- * @file service_manager.c
+ * @file components/services/src/service_manager.c
  * @brief Service Manager – implementation.
  *
  * =============================================================================
@@ -48,6 +48,12 @@ typedef struct {
  * ============================================================ */
 static const service_entry_t s_services[] = {
     {
+        .name = "gps",
+        .init = gps_service_init,
+        .register_handlers = gps_service_register_handlers,
+        .start = gps_service_start
+    },
+    {
         .name = "timer",
         .init = timer_service_init,
         .register_handlers = timer_service_register_handlers,
@@ -70,12 +76,6 @@ static const service_entry_t s_services[] = {
         .init = buzzer_service_init,
         .register_handlers = buzzer_service_register_handlers,
         .start = buzzer_service_start
-    },
-    {
-        .name = "gps",
-        .init = gps_service_init,
-        .register_handlers = gps_service_register_handlers,
-        .start = gps_service_start
     },
     // {
     //     .name = "gsm",
