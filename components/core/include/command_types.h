@@ -55,9 +55,9 @@ typedef enum {
      * Actuation commands – physical output control --– domain level
      * -------------------------------------------------------- */
     CMD_OPEN_LID,                 /**< Open bin lid (servo) */
-    CMD_CLOSE_LID,               /**< Close bin lid (servo) */
+    CMD_CLOSE_LID,                  /**< Close bin lid (servo) */
     CMD_LOCK_BIN,                /**< Prevent lid opening */
-    CMD_UNLOCK_BIN,             /**< Allow lid opening */
+    CMD_UNLOCK_BIN,                  /**< Allow lid opening */
 
     /* Servo – hardware level */
     CMD_SERVO_SET_ANGLE,
@@ -80,11 +80,18 @@ typedef enum {
     /* --------------------------------------------------------
      * User interface commands – visual/acoustic feedback
      * -------------------------------------------------------- */
-    CMD_UPDATE_DISPLAY,         /**< Refresh LCD content */
-    CMD_BLINK_LCD_BACKLIGHT,    /**< Blink LCD backlight */
     CMD_UPDATE_INDICATORS,      /**< Set LED patterns */
-    CMD_SHOW_MESSAGE,           /**< Display text lines */
     CMD_PLAY_SOUND,             /**< Emit buzzer tone */
+
+    /* --------------------------------------------------------
+     * LCD commands
+     * -------------------------------------------------------- */
+    CMD_SHOW_MESSAGE,       /**< Display text on LCD (params: cmd_show_message_params_t) */
+    CMD_CLEAR_LCD,          /**< Clear display and home cursor */
+    CMD_SET_BACKLIGHT,      /**< Turn backlight on/off (params: cmd_backlight_params_t) */
+    CMD_LCD_CURSOR,         /**< Set cursor position (params: cmd_cursor_params_t) */
+    CMD_LCD_SCROLL_LEFT,    /**< Shift display left by one column */
+    CMD_LCD_SCROLL_RIGHT,   /**< Shift display right by one column */  
 
     /* --------------------------------------------------------
      * Connectivity commands – network control
@@ -175,6 +182,12 @@ typedef enum {
     CMD_STOP_PERIODIC_TIMER,            /**< Stop periodic heartbeat */
     CMD_START_ONESHOT_TIMER,            /**< Start a one‑shot timer (generic) */
     CMD_STOP_ONESHOT_TIMER,             /**< Stop a one‑shot timer (generic) */
+
+    CMD_START_ONESHOT_TIMER_EX,         /**< Start oneshot timer with custom event (params: cmd_start_timer_ex_params_t) */
+
+    /* --------------------------------------------------------
+     * MQTT topic management commands
+     * -------------------------------------------------------- */
 
     /* --------------------------------------------------------
      * Maintenance commands – service mode control

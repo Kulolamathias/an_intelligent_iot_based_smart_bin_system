@@ -23,6 +23,7 @@ static esp_timer_handle_t s_intent_timer = NULL;
 static esp_timer_handle_t s_escalation_timer = NULL;
 static esp_timer_handle_t s_periodic_timer = NULL;
 static esp_timer_handle_t s_oneshot_timer = NULL;
+static system_event_id_t s_custom_event_id = EVENT_MAX_EVENT_ID;
 
 /* ============================================================
  * Timer callback functions
@@ -70,14 +71,17 @@ static void periodic_timer_callback(void *arg)
 static void oneshot_timer_callback(void *arg)
 {
     (void)arg;
+    system_event_id_t ev_id = (s_custom_event_id != EVENT_MAX_EVENT_ID) ? s_custom_event_id : EVENT_ONESHOT_REPORT_TIMEOUT;
     system_event_t ev = {
-        .id = EVENT_ONESHOT_REPORT_TIMEOUT,
+        .id = ev_id,
         .timestamp_us = esp_timer_get_time(),
         .source = 0,
         .data = { { {0} } }
     };
     service_post_event(&ev);
-    ESP_LOGD(TAG, "EVENT_ONESHOT_REPORT_TIMEOUT posted");
+    ESP_LOGD(TAG, "Posted event %d", ev_id);
+    // Reset custom event ID after posting
+    s_custom_event_id = EVENT_MAX_EVENT_ID;
 }
 
 /* ============================================================
@@ -215,6 +219,35 @@ static esp_err_t handle_stop_oneshot_timer(void *context, void *params)
     return ESP_OK;
 }
 
+static esp_err_t handle_start_oneshot_timer_ex(void *context, void *params)
+{
+    (void)context;
+    if (!params) return ESP_ERR_INVALID_ARG;
+    cmd_start_timer_ex_params_t *p = (cmd_start_timer_ex_params_t*)params;
+
+    if (!s_oneshot_timer) {
+        ESP_LOGE(TAG, "One‑shot timer not created");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // Store the custom event ID
+    s_custom_event_id = p->event_id;
+
+    // Stop any existing timer
+    esp_timer_stop(s_oneshot_timer);
+
+    // Start the timer
+    esp_err_t ret = esp_timer_start_once(s_oneshot_timer, p->timeout_ms * 1000);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start one‑shot timer: %d", ret);
+        s_custom_event_id = EVENT_MAX_EVENT_ID;
+        return ESP_FAIL;
+    }
+
+    ESP_LOGD(TAG, "One‑shot timer started: %lu ms, will post event %d", p->timeout_ms, p->event_id);
+    return ESP_OK;
+}
+
 /* ============================================================
  * Base contract implementation
  * ============================================================ */
@@ -300,6 +333,8 @@ esp_err_t timer_service_register_handlers(void)
     ret = service_register_command(CMD_START_ONESHOT_TIMER, handle_start_oneshot_timer, NULL);
     if (ret != ESP_OK) return ret;
     ret = service_register_command(CMD_STOP_ONESHOT_TIMER, handle_stop_oneshot_timer, NULL);
+    if (ret != ESP_OK) return ret;
+    ret = service_register_command(CMD_START_ONESHOT_TIMER_EX, handle_start_oneshot_timer_ex, NULL);
     if (ret != ESP_OK) return ret;
     ESP_LOGI(TAG, "Timer command handlers registered");
     return ESP_OK;

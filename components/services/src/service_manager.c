@@ -17,6 +17,7 @@
 #include "indicator_service.h"
 #include "led_service.h"
 #include "buzzer_service.h"
+#include "lcd_service.h"
 #include "gsm_service.h"
 #include "gps_service.h"
 #include "pir_service.h"
@@ -59,12 +60,12 @@ static const service_entry_t s_services[] = {
         .register_handlers = timer_service_register_handlers,
         .start = timer_service_start
     },
-    // {
-    //     .name = "indicator",
-    //     .init = indicator_service_init,
-    //     .register_handlers = indicator_service_register_handlers,
-    //     .start = indicator_service_start
-    // },
+    {
+        .name = "lcd",
+        .init = lcd_service_init,
+        .register_handlers = lcd_service_register_handlers,
+        .start = lcd_service_start
+    },
     {
         .name = "led",
         .init = led_service_init,

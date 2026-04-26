@@ -6,7 +6,8 @@ idf_component_register(
         "sensors/pir_driver/pir_driver.c"
         "sensors/ultrasonic_driver/ultrasonic_driver.c"
 
-        "actuators/lcd_driver/lcd_driver.c"
+        # "actuators/display/lcd_i2c_driver/example_lcd_i2c_main.c"
+        "actuators/display/lcd_i2c_driver/lcd_i2c_driver.c"
         "actuators/led_driver/led_driver.c"
         "actuators/buzzer_driver/buzzer_driver.c"
         "actuators/servo_driver/servo_driver.c"
@@ -18,10 +19,10 @@ idf_component_register(
         "sensors/pir_driver"
         "sensors/ultrasonic_driver"
 
-        "actuators/led_driver"
-        "actuators/lcd_driver"
+        "actuators/display/lcd_i2c_driver"
         "actuators/buzzer_driver"
         "actuators/servo_driver"
+        "actuators/led_driver"
 
         "comms/gsm_sim800"
         "comms/gps"

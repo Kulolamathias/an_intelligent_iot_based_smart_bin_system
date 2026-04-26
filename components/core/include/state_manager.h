@@ -81,6 +81,7 @@ typedef struct {
      * Extended context – feature placeholders
      * -------------------------------------------------------- */
     gps_coordinates_t gps_coordinates; /**< Last known position */
+    bool pending_welcome;              /**< true after lid close, waiting to show welcome */
     auth_status_t auth_status;         /**< Current authentication state */
     error_flags_t error_flags;         /**< Active error conditions */
 

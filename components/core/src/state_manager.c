@@ -51,6 +51,11 @@
         .commands = { __VA_ARGS__ }, \
         .count = sizeof((transition_command_t[]){ __VA_ARGS__ }) / sizeof(transition_command_t) \
     }
+
+/**
+ * @brief Empty command batch – no commands.
+ */
+#define COMMAND_BATCH_EMPTY { .commands = {}, .count = 0 }
     
 static const char *TAG = "StateManager";
 
@@ -403,6 +408,90 @@ static void prepare_buzzer_off(const system_context_t *ctx,
     p->buzzer_id = 0;
 }
 
+/* ============================================================
+ * LCD message preparers
+ * ============================================================ */
+
+static void prepare_welcome_message(const system_context_t *ctx,
+                                    const system_event_t *event,
+                                    void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Welcome");
+    p->line2[0] = '\0';
+}
+
+static void prepare_attention_message(const system_context_t *ctx,
+                                      const system_event_t *event,
+                                      void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Raise waste");
+    snprintf(p->line2, sizeof(p->line2), "to open");
+}
+
+static void prepare_processing_message(const system_context_t *ctx,
+                                       const system_event_t *event,
+                                       void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Lid open");
+    snprintf(p->line2, sizeof(p->line2), "Dispose waste");
+}
+
+static void prepare_thank_you_message(const system_context_t *ctx,
+                                      const system_event_t *event,
+                                      void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Thank you");
+    p->line2[0] = '\0';
+}
+
+static void prepare_near_full_message(const system_context_t *ctx,
+                                      const system_event_t *event,
+                                      void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Bin near full");
+    snprintf(p->line2, sizeof(p->line2), "Will lock soon");
+}
+
+static void prepare_maintenance_message(const system_context_t *ctx,
+                                        const system_event_t *event,
+                                        void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "Maintenance mode");
+    p->line2[0] = '\0';
+}
+
+static void prepare_error_message(const system_context_t *ctx,
+                                  const system_event_t *event,
+                                  void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_show_message_params_t *p = params_out;
+    snprintf(p->line1, sizeof(p->line1), "ERROR");
+    snprintf(p->line2, sizeof(p->line2), "Check system");
+}
+
+static void prepare_welcome_timer(const system_context_t *ctx, 
+                                  const system_event_t *event, 
+                                  void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_start_timer_ex_params_t *p = params_out;
+    p->timeout_ms = 2000;               // 2 seconds
+    p->event_id = EVENT_WELCOME_TIMEOUT;
+}
+
 
 /* ============================================================
  * TRANSITION CONDITION FUNCTIONS
@@ -457,11 +546,11 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
-            { CMD_START_PIR_MONITORING, NULL },  /* start PIR polling */
-            { CMD_UPDATE_DISPLAY, NULL },
+            { CMD_START_PIR_MONITORING, NULL },                 /* start PIR polling */
             { CMD_SEND_HEARTBEAT, NULL },
             { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_power_up }
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_power_up },
+            { CMD_SHOW_MESSAGE, prepare_welcome_message }
         )
     },
 
@@ -474,10 +563,10 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ACTIVE,
         .command_batch = COMMAND_BATCH(
-            { CMD_UPDATE_INDICATORS, NULL },                /* LED/buzzer attention */
-            { CMD_SHOW_MESSAGE, NULL },                     /* "Raise waste to open" */
-            { CMD_LED_BLINK, prepare_led_blink_attention }, /* White LED (LED0) blink attention */
-            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_attention }
+            { CMD_UPDATE_INDICATORS, NULL },                        /* TODO: to be removed .... LED/buzzer attention */
+            { CMD_LED_BLINK, prepare_led_blink_attention },         /* White LED (LED0) blink attention */
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_attention },
+            { CMD_SHOW_MESSAGE, prepare_attention_message }
         )
     },
     /* ----------------------------------------------------------------------------------------
@@ -491,9 +580,9 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_OPEN_LID, NULL },
             { CMD_START_INTENT_TIMER, prepare_intent_timer },
-            { CMD_UPDATE_INDICATORS, NULL },    /* success pattern */
-            { CMD_LED_BLINK_STOP, NULL },   /* stop white LED blink (LED0) */
-            { CMD_LED_ON, NULL },            /* turn green LED (LED1) on */
+            { CMD_UPDATE_INDICATORS, NULL },                        /* success pattern */
+            { CMD_LED_BLINK_STOP, NULL },                           /* stop white LED blink (LED0) */
+            { CMD_LED_ON, NULL },                                   /* turn green LED (LED1) on */
             { CMD_LED_BLINK, prepare_led_blink_attention },
             { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_success }
         )
@@ -508,13 +597,41 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_ACTIVE,      /* remain active */
         .command_batch = COMMAND_BATCH(
-            { CMD_OPEN_LID, NULL },
+            // { CMD_OPEN_LID, NULL },
             { CMD_START_INTENT_TIMER, prepare_intent_timer },
-            { CMD_UPDATE_INDICATORS, NULL },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
             { CMD_LED_SET_BRIGHTNESS, prepare_led_on_green },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_success }
+            { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_success },
+            { CMD_SHOW_MESSAGE, prepare_processing_message }
         )
+    },
+    {
+        .current_state = SYSTEM_STATE_ACTIVE,
+        .event_id      = EVENT_LID_OPENED,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ACTIVE,
+        .command_batch = COMMAND_BATCH_EMPTY
+    },
+    {
+        .current_state = SYSTEM_STATE_ACTIVE,
+        .event_id      = EVENT_FILL_LEVEL_UPDATED, /**< (fill level updated, but no threshold reached) */
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ACTIVE,
+        .command_batch =  COMMAND_BATCH_EMPTY
+    },
+    {
+        .current_state = SYSTEM_STATE_ACTIVE,
+        .event_id      = EVENT_LID_OPENED,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ACTIVE,
+        .command_batch =  COMMAND_BATCH_EMPTY
+    },
+    {
+        .current_state = SYSTEM_STATE_ACTIVE,
+        .event_id      = EVENT_NETWORK_MESSAGE_RECEIVED, /**< (network message received – ignore) */
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ACTIVE,
+        .command_batch = COMMAND_BATCH_EMPTY
     },
 
     /* --------------------------------------------------------
@@ -527,14 +644,15 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
             { CMD_STOP_INTENT_TIMER, NULL },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_LED_OFF, prepare_led_off_white },
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_OFF, prepare_led_off_blue },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
-            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade }
+            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade },
+            { CMD_SHOW_MESSAGE, prepare_thank_you_message },
+            { CMD_START_ONESHOT_TIMER_EX, prepare_welcome_timer }   // start timer for welcome
         )
     },
     {
@@ -544,14 +662,14 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
                 { CMD_CLOSE_LID, NULL },
-                { CMD_UPDATE_DISPLAY, NULL },
                 { CMD_LED_OFF, prepare_led_off_white },
                 { CMD_LED_OFF, prepare_led_off_green },
                 { CMD_LED_OFF, prepare_led_off_yellow },
                 { CMD_LED_OFF, prepare_led_off_red },
                 { CMD_LED_OFF, prepare_led_off_blue },
                 { CMD_LED_BLINK_STOP, prepare_led_off_white },
-                { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same }
+                { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same },
+                { CMD_SHOW_MESSAGE, prepare_welcome_message }
             )
     },
     {
@@ -561,15 +679,35 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
             { CMD_CLOSE_LID, NULL },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_LED_OFF, prepare_led_off_white },
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_OFF, prepare_led_off_blue },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
-            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same }
+            { CMD_BUZZER_STOP, prepare_buzzer_gentle_fade_same },
+            { CMD_SHOW_MESSAGE, prepare_welcome_message }
         )
+    },
+
+    /* --------------------------------------------------------
+     * IDLE → IDLE (pending welcome message timer expires)
+     * -------------------------------------------------------- */
+    {
+        .current_state = SYSTEM_STATE_IDLE,
+        .event_id      = EVENT_WELCOME_TIMEOUT,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_IDLE,
+        .command_batch = COMMAND_BATCH(
+            { CMD_SHOW_MESSAGE, prepare_welcome_message }
+        )
+    },
+    {
+        .current_state = SYSTEM_STATE_IDLE,
+        .event_id      = EVENT_FILL_LEVEL_UPDATED, /**< (fill level updated but below near‑full) */
+        .condition     = NULL,   // always match
+        .next_state    = SYSTEM_STATE_IDLE,
+        .command_batch = COMMAND_BATCH_EMPTY   // or COMMAND_BATCH() with no commands
     },
 
     /* --------------------------------------------------------
@@ -582,9 +720,9 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_NEAR_FULL,
         .command_batch = COMMAND_BATCH(
             { CMD_SEND_NOTIFICATION, prepare_near_full_notification },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_LED_BLINK, prepare_led_blink_slow },
-            { CMD_BUZZER_BEEP, prepare_buzzer_warning_pulse }
+            { CMD_BUZZER_BEEP, prepare_buzzer_warning_pulse },
+            { CMD_SHOW_MESSAGE, prepare_near_full_message }
         )
     },
 
@@ -599,12 +737,12 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_LOCK_BIN, NULL },
             { CMD_SEND_NOTIFICATION, prepare_full_notification },
-            { CMD_SHOW_MESSAGE, prepare_show_full_message },
             { CMD_UPDATE_INDICATORS, NULL },
             { CMD_START_ESCALATION_TIMER, prepare_escalation_timer },
-            { CMD_LED_BLINK_STOP, prepare_led_off_yellow },               /* stop yellow blink */
-            { CMD_LED_BLINK, prepare_led_blink_fast },   /* start red fast blink */
-            { CMD_BUZZER_PATTERN, prepare_buzzer_urgent_alarm }
+            { CMD_LED_BLINK_STOP, prepare_led_off_yellow },                 /* stop yellow blink */
+            { CMD_LED_BLINK, prepare_led_blink_fast },                      /* start red fast blink */
+            { CMD_BUZZER_PATTERN, prepare_buzzer_urgent_alarm },
+            { CMD_SHOW_MESSAGE, prepare_show_full_message }
         )
     },
     
@@ -617,14 +755,14 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = condition_bin_not_near_full,
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_LED_BLINK_STOP,   prepare_led_off_red },
             { CMD_LED_OFF,          prepare_led_off_red },
             { CMD_LED_OFF,          prepare_led_off_yellow },
             { CMD_LED_OFF,          prepare_led_off_white },
             { CMD_LED_OFF,          prepare_led_off_green },
             { CMD_LED_OFF,          prepare_led_off_blue },
-            { CMD_BUZZER_STOP,      prepare_buzzer_off  }
+            { CMD_BUZZER_STOP,      prepare_buzzer_off  },
+            { CMD_SHOW_MESSAGE, prepare_welcome_message }
         )
     },
 
@@ -639,7 +777,6 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_UNLOCK_BIN, NULL },
             { CMD_SEND_NOTIFICATION, prepare_empty_notification },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_STOP_ESCALATION_TIMER, NULL },
             { CMD_LED_BLINK_STOP,   prepare_led_off_red },
             { CMD_LED_OFF,          prepare_led_off_red },
@@ -647,7 +784,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF,          prepare_led_off_white },
             { CMD_LED_OFF,          prepare_led_off_green },
             { CMD_LED_OFF,          prepare_led_off_blue },
-            { CMD_BUZZER_STOP,      prepare_buzzer_off  }
+            { CMD_BUZZER_STOP,      prepare_buzzer_off  },
+            { CMD_SHOW_MESSAGE,     prepare_welcome_message }
         )
     },
 
@@ -676,14 +814,14 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_UNLOCK_BIN, NULL },
             { CMD_ENTER_MAINTENANCE_MODE, NULL },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord }
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord },
+            { CMD_SHOW_MESSAGE, prepare_maintenance_message }
         )
     },
     {
@@ -694,14 +832,14 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_UNLOCK_BIN, NULL },
             { CMD_ENTER_MAINTENANCE_MODE, NULL },
-            { CMD_UPDATE_DISPLAY, NULL },
             { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
             { CMD_LED_BLINK_STOP, prepare_led_off_white },
             { CMD_LED_OFF, prepare_led_off_green },
             { CMD_LED_OFF, prepare_led_off_yellow },
             { CMD_LED_OFF, prepare_led_off_red },
             { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord }
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord },
+            { CMD_SHOW_MESSAGE, prepare_maintenance_message }
         )
     },
 
@@ -717,8 +855,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_EXIT_MAINTENANCE_MODE, NULL },
             { CMD_SAVE_CONFIGURATION, NULL },
             { CMD_LOCK_BIN, NULL },
-            { CMD_UPDATE_DISPLAY, NULL },
-            { CMD_LED_OFF, prepare_led_off_blue }
+            { CMD_LED_OFF, prepare_led_off_blue },
+            { CMD_SHOW_MESSAGE, prepare_welcome_message }
         )
     },
 
@@ -737,8 +875,9 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_BLINK_STOP, prepare_led_off_yellow },
             { CMD_LED_BLINK_STOP, prepare_led_off_red },
             { CMD_LED_BLINK_STOP, prepare_led_off_blue },
-            { CMD_LED_BLINK, prepare_led_blink_fast },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando }
+            { CMD_LED_BLINK,      prepare_led_blink_fast },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando },
+            { CMD_SHOW_MESSAGE,   prepare_error_message }
         )
     },
     {
@@ -754,7 +893,8 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_BLINK_STOP, prepare_led_off_red },
             { CMD_LED_BLINK_STOP, prepare_led_off_blue },
             { CMD_LED_BLINK, prepare_led_blink_fast },
-            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando }
+            { CMD_BUZZER_PATTERN, prepare_buzzer_error_glissando },
+            { CMD_SHOW_MESSAGE, prepare_error_message }
         )
     },
 
@@ -848,6 +988,9 @@ esp_err_t state_manager_process_event(const system_event_t *event)
             break;
         case EVENT_AUTH_DENIED:
             g_context.auth_status = AUTH_STATUS_DENIED;
+            break;
+        case EVENT_LID_CLOSED:
+            g_context.pending_welcome = true;
             break;
         case EVENT_GPS_COORDINATES_UPDATED:
             g_context.gps_coordinates = event->data.gps_update.coordinates;

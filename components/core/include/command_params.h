@@ -39,6 +39,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "core_types.h"
+#include "event_types.h"  /**< TODO: To be revised ..staying in this file... */
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +48,7 @@ extern "C" {
 /* ------------------------------------------------------------
  * CMD_SEND_NOTIFICATION
  * ------------------------------------------------------------ */
+
 typedef struct {
     char message[64];          /**< Notification text (null-terminated) */
     bool is_escalation;        /**< true = high priority, false = normal */
@@ -58,11 +60,11 @@ typedef struct {
     char message[161];
 } cmd_send_sms_params_t;
 
-/* */
 
 /* ---------------------------------------------------------
  * GPS command parameters 
  * --------------------------------------------------------- */
+
 typedef struct {
     double latitude;            /**< Latitude in degrees */
     double longitude;           /**< Longitude in degrees */
@@ -76,22 +78,50 @@ typedef struct {
 
 
 /* ------------------------------------------------------------
- * CMD_SHOW_MESSAGE (LCD display)
- * ------------------------------------------------------------ */
-typedef struct {
-    char line1[20];            /**< First display line */
-    char line2[20];            /**< Second display line */
-} cmd_show_message_params_t;
-
-
-/* ------------------------------------------------------------
  * CMD_UPDATE_INDICATORS (LEDs, buzzer)
  * ------------------------------------------------------------ */
+
 typedef struct {
     uint8_t led_pattern;       /**< Bitmask or pattern ID: 0=off, 1=solid, 2=slow blink, 3=fast blink, etc.*/
     uint8_t buzzer_pattern;    /**< Tone sequence ID */
     uint8_t lcd_pattern;       /**< LCD backlight blink pattern (same encoding) */
 } cmd_update_indicators_params_t;
+
+
+/* ------------------------------------------------------------
+ * LCD command parameters
+ * ------------------------------------------------------------ */
+
+/**
+ * @brief Parameters for CMD_SHOW_MESSAGE – display up to 2 lines.
+ */
+typedef struct {
+    char line1[21];   /**< First line text (max 20 chars + null) */
+    char line2[21];   /**< Second line text (max 20 chars + null) */
+} cmd_show_message_params_t;
+
+/**
+ * @brief Parameters for CMD_SET_BACKLIGHT.
+ */
+typedef struct {
+    bool on;          /**< true = backlight on, false = off */
+    uint8_t percent;  /**< Optional brightness (0-100) – not used in basic version */
+} cmd_backlight_params_t;
+
+/**
+ * @brief Parameters for CMD_LCD_CURSOR.
+ */
+typedef struct {
+    uint8_t line;     /**< Line index (0‑based, must be < rows) */
+    uint8_t col;      /**< Column index (0‑based, must be < cols) */
+    bool blink;       /**< Optional: enable cursor blink */
+    bool underline;   /**< Optional: enable underline cursor */
+} cmd_cursor_params_t;
+
+typedef struct {
+    uint32_t timeout_ms;
+    system_event_id_t event_id;   /**< Event to post when timer expires */
+} cmd_start_timer_ex_params_t;
 
 
 /* ------------------------------------------------------------
@@ -298,6 +328,9 @@ typedef union {
     buzzer_off_params_t               buzzer_off;
     buzzer_beep_params_t              buzzer_beep;
     buzzer_pattern_params_t           buzzer_pattern;
+    cmd_backlight_params_t            backlight;
+    cmd_cursor_params_t               cursor;
+    cmd_start_timer_ex_params_t       start_timer_ex;
     gps_add_location_params_t         gps_add_location;
     gps_set_name_params_t             gps_set_name;
 } command_param_union_t;

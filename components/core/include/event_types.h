@@ -58,7 +58,7 @@ typedef enum {
     EVENT_PERSON_LEFT,                /**< Person no longer present */
     EVENT_CLOSE_RANGE_DETECTED,       /**< HERE: by tilt ultrasonic sensor just for intent */
     EVENT_CLOSE_RANGE_LOST,           /**< Here: close range no longer detected */
-    EVENT_INTENT_SENSOR_READ,         /**<  */
+    EVENT_INTENT_SENSOR_READ,         /**< TODO: to be removed, i hope so */
     EVENT_INTENT_SIGNAL_DETECTED,     /**< Intent sensor (radar/ultrasonic) triggered */
     EVENT_INTENT_TIMEOUT,             /**< Intent evaluation period expired */
     EVENT_FILL_LEVEL_UPDATED,       /**< New fill level measurement available */
@@ -79,11 +79,13 @@ typedef enum {
     EVENT_WIFI_STATUS,               /**< WiFi status update (payload: wifi_service_state_t) */
     EVENT_WIFI_DISCONNECTED,         /**< WiFi link lost */
     EVENT_WIFI_CONNECTION_FAILED,    /**< WiFi connection attempt failed */
+
     EVENT_NETWORK_MESSAGE_RECEIVED,  /**< Incoming MQTT/network message */
     EVENT_MQTT_CONNECTING,           /**< MQTT connection attempt initiated */
     EVENT_MQTT_CONNECTED,            /**< MQTT connection established */
     EVENT_MQTT_DISCONNECTED,         /**< MQTT connection lost */
     EVENT_MQTT_CONNECTION_FAILED,    /**< MQTT connection attempt failed */
+    
     EVENT_GSM_CONNECTED,             /**< GSM network registered */
     EVENT_GSM_DISCONNECTED,          /**< GSM network lost */
     EVENT_GSM_SMS_RECEIVED,          /**< SMS received (payload: sender, message) */
@@ -107,6 +109,9 @@ typedef enum {
      * -------------------------------------------------------- */
     EVENT_INTENT_VALIDATED,          /**< Intent pattern confirmed */
     EVENT_INTENT_REJECTED,           /**< Intent pattern invalid */
+
+
+    EVENT_WELCOME_TIMEOUT,   /**< Timer expired to show welcome message after thank you */
 
     /* --------------------------------------------------------
      * Configuration events
@@ -155,7 +160,9 @@ typedef enum {
      * Power management
      * -------------------------------------------------------- */
     EVENT_LOW_BATTERY_DETECTED,     /**< Battery below threshold */
-    EVENT_BATTERY_NORMAL            /**< Battery recovered */
+    EVENT_BATTERY_NORMAL,            /**< Battery recovered */
+
+    EVENT_MAX_EVENT_ID
 
 } system_event_id_t;
 

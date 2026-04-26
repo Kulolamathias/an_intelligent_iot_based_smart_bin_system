@@ -2,8 +2,6 @@ idf_component_register(
     SRCS
         "src/service_manager.c"
         "timer/timer_service.c"
-        
-        # "indicator/indicator_service.c"
 
         "connectivity/connectivity_service.c"
         "connectivity/gsm/gsm_service.c"
@@ -19,12 +17,13 @@ idf_component_register(
 
         "location/gps_service.c"
 
-        "sensing/pir/pir_service.c"
-        "sensing/ultrasonic/ultrasonic_service.c"
+        "sensing/pir_service/pir_service.c"
+        "sensing/ultrasonic_service/ultrasonic_service.c"
 
-        "actuation/led/led_service.c"
-        "actuation/buzzer/buzzer_service.c"
-        "actuation/servo/servo_service.c"
+        "actuation/led_service/led_service.c"
+        "actuation/buzzer_service/buzzer_service.c"
+        "actuation/lcd_service/lcd_service.c"
+        "actuation/servo_service/servo_service.c"
 
         "example/example_service.c"
 
@@ -38,13 +37,14 @@ idf_component_register(
         "config"
 
         "sensing"
-        "sensing/pir"
-        "sensing/ultrasonic"
+        "sensing/pir_service"
+        "sensing/ultrasonic_service"
 
         "actuation"
-        "actuation/led"
-        "actuation/buzzer"
-        "actuation/servo"
+        "actuation/led_service"
+        "actuation/buzzer_service"
+        "actuation/lcd_service"
+        "actuation/servo_service"
 
         "connectivity"
         "connectivity/gsm"

@@ -12,4 +12,5 @@ idf_component_register(
         tests
         esp_event
         efuse
+        drivers
 )

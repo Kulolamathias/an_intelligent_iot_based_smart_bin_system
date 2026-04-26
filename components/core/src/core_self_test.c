@@ -122,13 +122,6 @@ static esp_err_t stub_handle_send_heartbeat(void *ctx, void *params)
     return ESP_OK;
 }
 
-static esp_err_t stub_handle_update_display(void *ctx, void *params)
-{
-    (void)ctx; (void)params;
-    log_command("CMD_UPDATE_DISPLAY");
-    return ESP_OK;
-}
-
 static esp_err_t stub_handle_update_indicators(void *ctx, void *params)
 {
     (void)ctx; (void)params;
@@ -224,7 +217,6 @@ static void register_stub_handlers(void)
     command_router_register_handler(CMD_UNLOCK_BIN,             stub_handle_unlock_bin,             NULL);
     command_router_register_handler(CMD_SEND_NOTIFICATION,      stub_handle_send_notification,      NULL);
     command_router_register_handler(CMD_SEND_HEARTBEAT,         stub_handle_send_heartbeat,         NULL);
-    command_router_register_handler(CMD_UPDATE_DISPLAY,         stub_handle_update_display,         NULL);
     command_router_register_handler(CMD_UPDATE_INDICATORS,      stub_handle_update_indicators,      NULL);
     command_router_register_handler(CMD_SHOW_MESSAGE,           stub_handle_show_message,           NULL);
     command_router_register_handler(CMD_START_INTENT_TIMER,     stub_handle_start_intent_timer,     NULL);
