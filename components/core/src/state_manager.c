@@ -762,7 +762,7 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF,          prepare_led_off_green },
             { CMD_LED_OFF,          prepare_led_off_blue },
             { CMD_BUZZER_STOP,      prepare_buzzer_off  },
-            { CMD_SHOW_MESSAGE, prepare_welcome_message }
+            { CMD_SHOW_MESSAGE,     prepare_welcome_message }
         )
     },
 
@@ -776,16 +776,16 @@ static const state_transition_rule_t g_transition_table[] =
         .next_state    = SYSTEM_STATE_IDLE,
         .command_batch = COMMAND_BATCH(
             { CMD_UNLOCK_BIN, NULL },
-            { CMD_SEND_NOTIFICATION, prepare_empty_notification },
-            { CMD_STOP_ESCALATION_TIMER, NULL },
-            { CMD_LED_BLINK_STOP,   prepare_led_off_red },
-            { CMD_LED_OFF,          prepare_led_off_red },
-            { CMD_LED_OFF,          prepare_led_off_yellow },
-            { CMD_LED_OFF,          prepare_led_off_white },
-            { CMD_LED_OFF,          prepare_led_off_green },
-            { CMD_LED_OFF,          prepare_led_off_blue },
-            { CMD_BUZZER_STOP,      prepare_buzzer_off  },
-            { CMD_SHOW_MESSAGE,     prepare_welcome_message }
+            { CMD_SEND_NOTIFICATION,        prepare_empty_notification },
+            { CMD_STOP_ESCALATION_TIMER,    NULL },
+            { CMD_LED_BLINK_STOP,           prepare_led_off_red },
+            { CMD_LED_OFF,                  prepare_led_off_red },
+            { CMD_LED_OFF,                  prepare_led_off_yellow },
+            { CMD_LED_OFF,                  prepare_led_off_white },
+            { CMD_LED_OFF,                  prepare_led_off_green },
+            { CMD_LED_OFF,                  prepare_led_off_blue },
+            { CMD_BUZZER_STOP,              prepare_buzzer_off  },
+            { CMD_SHOW_MESSAGE,             prepare_welcome_message }
         )
     },
 
@@ -880,6 +880,7 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_SHOW_MESSAGE,   prepare_error_message }
         )
     },
+
     {
         .current_state = SYSTEM_STATE_ANY,
         .event_id      = EVENT_SYSTEM_ERROR_DETECTED,
