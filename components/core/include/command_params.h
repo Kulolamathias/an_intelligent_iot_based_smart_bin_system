@@ -50,7 +50,7 @@ extern "C" {
  * ------------------------------------------------------------ */
 
 typedef struct {
-    char message[64];          /**< Notification text (null-terminated) */
+    char message[128];          /**< Notification text (null-terminated) */
     bool is_escalation;        /**< true = high priority, false = normal */
 } cmd_send_notification_params_t;
 
@@ -60,21 +60,12 @@ typedef struct {
     char message[161];
 } cmd_send_sms_params_t;
 
-
-/* ---------------------------------------------------------
- * GPS command parameters 
- * --------------------------------------------------------- */
+/* For CMD_SEND_SMS_RESPONSE – same parameters */
+typedef cmd_send_sms_params_t cmd_send_sms_response_params_t;
 
 typedef struct {
-    double latitude;            /**< Latitude in degrees */
-    double longitude;           /**< Longitude in degrees */
-    uint16_t radius_meters;     /**< Matching radius (meters) */
-    char name[64];              /**< Location name */
-} gps_add_location_params_t;
-
-typedef struct {
-    char name[64];              /**< Name to assign to current location */
-} gps_set_name_params_t;
+    char phone_number[16];
+} cmd_set_phone_number_params_t;
 
 
 /* ------------------------------------------------------------
@@ -331,8 +322,6 @@ typedef union {
     cmd_backlight_params_t            backlight;
     cmd_cursor_params_t               cursor;
     cmd_start_timer_ex_params_t       start_timer_ex;
-    gps_add_location_params_t         gps_add_location;
-    gps_set_name_params_t             gps_set_name;
 } command_param_union_t;
 
 #ifdef __cplusplus

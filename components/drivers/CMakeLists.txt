@@ -12,7 +12,7 @@ idf_component_register(
         "actuators/buzzer_driver/buzzer_driver.c"
         "actuators/servo_driver/servo_driver.c"
 
-        "comms/gsm_sim800/gsm_sim800_driver.c"
+        "comms/gsm_sim800/gsm_driver.c"
         "comms/gps/gps_driver.c"
 
     INCLUDE_DIRS

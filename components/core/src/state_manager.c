@@ -42,6 +42,8 @@
 #include "esp_log.h"
 #include <string.h>
 #include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #define MAX_COMMANDS_PER_TRANSITION 12
 
@@ -58,6 +60,9 @@
 #define COMMAND_BATCH_EMPTY { .commands = {}, .count = 0 }
     
 static const char *TAG = "StateManager";
+
+/* ---------- Thread‑safe context access ---------- */
+static SemaphoreHandle_t s_context_mutex = NULL;
 
 /* ============================================================
  * INTERNAL TYPE DEFINITIONS – TRANSITION RULE COMPONENTS
@@ -126,6 +131,9 @@ static system_context_t g_context;
  * They are called only when a command that requires parameters is executed.
  * ============================================================ */
 
+
+static esp_err_t context_lock_init(void);
+
 static void prepare_intent_timer(const system_context_t *ctx, const system_event_t *event, void *params_out)
 {
     (void)ctx; (void)event;
@@ -179,6 +187,14 @@ static void prepare_set_wifi_state(const system_context_t *ctx, const system_eve
     (void)ctx; (void)event;
     uint32_t *state = params_out;
     *state = 1;   // WiFi connected
+}
+
+static void prepare_escalation_message(const system_context_t *ctx, const system_event_t *event, void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_send_notification_params_t *p = params_out;
+    snprintf(p->message, sizeof(p->message), "ALERT: Bin at %d%% full, collector did not respond. Escalating to manager.", ctx->bin_fill_level_percent);
+    p->is_escalation = true;
 }
 
 /* ============================================================
@@ -555,6 +571,28 @@ static const state_transition_rule_t g_transition_table[] =
     },
 
     /* --------------------------------------------------------
+    * INIT → MAINTENANCE (GSM authentication granted, even before WiFi)
+    * -------------------------------------------------------- */
+    {
+        .current_state = SYSTEM_STATE_INIT,
+        .event_id      = EVENT_AUTH_GRANTED,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_MAINTENANCE,
+        .command_batch = COMMAND_BATCH(
+            { CMD_UNLOCK_BIN, NULL },
+            { CMD_ENTER_MAINTENANCE_MODE, NULL },
+            { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord },
+            { CMD_SHOW_MESSAGE, prepare_maintenance_message }
+        )
+    },
+
+    /* --------------------------------------------------------
      * IDLE → ACTIVE (person detected by PIR)
      * -------------------------------------------------------- */
     {
@@ -798,7 +836,7 @@ static const state_transition_rule_t g_transition_table[] =
         .condition     = NULL,
         .next_state    = SYSTEM_STATE_FULL,
         .command_batch = COMMAND_BATCH(
-            { CMD_SEND_ESCALATION_NOTIFICATION, NULL },
+            { CMD_ESCALATE_NOTIFICATION, prepare_escalation_message },
             { CMD_BUZZER_PATTERN, prepare_buzzer_escalating_siren }
         )
     },
@@ -913,6 +951,21 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state }
         )
     },
+
+    {
+        .current_state = SYSTEM_STATE_ANY,
+        .event_id      = EVENT_GPS_FIX_UPDATE,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ANY,   /* remains in same state */
+        .command_batch = COMMAND_BATCH_EMPTY
+    },
+    {
+        .current_state = SYSTEM_STATE_ANY,
+        .event_id      = EVENT_GPS_FIX_LOST,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_ANY,
+        .command_batch = COMMAND_BATCH_EMPTY
+    }
 };
 
 #define TRANSITION_TABLE_SIZE \
@@ -962,6 +1015,11 @@ esp_err_t state_manager_init(const system_context_t *initial_context)
     system_state_init();
     memcpy(&g_context, initial_context, sizeof(system_context_t));
 
+    esp_err_t mutex_ret = context_lock_init();
+    if (mutex_ret != ESP_OK) {
+        return mutex_ret;  // cannot continue without mutex
+    }
+
     ESP_LOGI(TAG, "State manager initialized. Current state: %s",
              system_state_to_string(system_state_get()));
     return ESP_OK;
@@ -993,8 +1051,27 @@ esp_err_t state_manager_process_event(const system_event_t *event)
         case EVENT_LID_CLOSED:
             g_context.pending_welcome = true;
             break;
-        case EVENT_GPS_COORDINATES_UPDATED:
-            g_context.gps_coordinates = event->data.gps_update.coordinates;
+        case EVENT_GPS_FIX_UPDATE:
+            if (s_context_mutex == NULL) break;
+            if (event->data.gps_fix.valid) {
+                xSemaphoreTake(s_context_mutex, portMAX_DELAY);
+                g_context.gps_coordinates.latitude  = event->data.gps_fix.latitude;
+                g_context.gps_coordinates.longitude = event->data.gps_fix.longitude;
+                g_context.gps_coordinates.altitude  = event->data.gps_fix.altitude_m;
+                g_context.gps_coordinates.fix_quality =
+                    (uint8_t)(event->data.gps_fix.satellites > 0 ? 1 : 0);
+                g_context.gps_valid = true;
+                xSemaphoreGive(s_context_mutex);
+            }
+            break;
+
+        case EVENT_GPS_FIX_LOST:
+            {
+                if (s_context_mutex == NULL) break;
+                xSemaphoreTake(s_context_mutex, portMAX_DELAY);
+                g_context.gps_valid = false;
+                xSemaphoreGive(s_context_mutex);
+            }
             break;
         case EVENT_MQTT_CONNECTED:
             command_router_execute(CMD_BIN_NET_NOTIFY_MQTT_CONNECTED, NULL);
@@ -1030,17 +1107,17 @@ esp_err_t state_manager_process_event(const system_event_t *event)
         // command_router_execute(CMD_PROCESS_WEB_COMMAND, &params);
     }
 
-    /**< For debugging: logging GPS fix updates */
-    if (event->id == EVENT_GPS_FIX_UPDATED) {
-        ESP_LOGI(TAG, "GPS fix: lat=%.6f, lon=%.6f, alt=%.1f, sats=%u, hdop=%.1f",
-                event->data.gps_fix.latitude,
-                event->data.gps_fix.longitude,
-                event->data.gps_fix.altitude_m,
-                event->data.gps_fix.satellites,
-                event->data.gps_fix.hdop);
-    } else if (event->id == EVENT_GPS_FIX_LOST) {
-        ESP_LOGI(TAG, "GPS fix lost");
-    }
+    // /**< For debugging: logging GPS fix updates */
+    // if (event->id == EVENT_GPS_FIX_UPDATED) {
+    //     ESP_LOGI(TAG, "GPS fix: lat=%.6f, lon=%.6f, alt=%.1f, sats=%u, hdop=%.1f",
+    //             event->data.gps_fix.latitude,
+    //             event->data.gps_fix.longitude,
+    //             event->data.gps_fix.altitude_m,
+    //             event->data.gps_fix.satellites,
+    //             event->data.gps_fix.hdop);
+    // } else if (event->id == EVENT_GPS_FIX_LOST) {
+    //     ESP_LOGI(TAG, "GPS fix lost");
+    // }
 
     /* --------------------------------------------------------
      * 2. EVALUATE TRANSITION TABLE – first match wins
@@ -1072,4 +1149,25 @@ esp_err_t state_manager_process_event(const system_event_t *event)
 const system_context_t* state_manager_get_context(void)
 {
     return &g_context;
+}
+
+
+static esp_err_t context_lock_init(void)
+{
+    if (s_context_mutex != NULL) {
+        return ESP_OK; /* already created */
+    }
+    s_context_mutex = xSemaphoreCreateMutex();
+    if (s_context_mutex == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+void state_manager_copy_context(system_context_t *dest) {
+    if (dest == NULL) return;
+    if (s_context_mutex == NULL) return;   /* not yet initialised */
+    xSemaphoreTake(s_context_mutex, portMAX_DELAY);
+    memcpy(dest, &g_context, sizeof(system_context_t));
+    xSemaphoreGive(s_context_mutex);
 }

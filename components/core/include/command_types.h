@@ -118,6 +118,8 @@ typedef enum {
     CMD_SEND_SMS_RESPONSE,       /**< Send SMS reply (params: cmd_send_sms_response_params_t) */
     CMD_SET_GSM_PASSWORD,       /**< Set GSM password (params: string) – optional */
     CMD_SET_AUTHORIZED_NUMBERS, /**< Set authorized numbers (params: array) – optional */
+    CMD_SET_COLLECTOR_NUMBER,
+    CMD_SET_MANAGER_NUMBER,
 
     /* -----------------------------------------------------
      * GPS commands
@@ -125,8 +127,7 @@ typedef enum {
     CMD_GPS_START,              /**< Power on GPS and begin reading */
     CMD_GPS_STOP,               /**< Power off GPS */
     CMD_GPS_GET_LAST_FIX,       /**< Retrieve most recent GPS coordinates */
-    CMD_GPS_ADD_KNOWN_LOCATION, /**< Add/update a known location mapping */
-    CMD_GPS_SET_LOCATION_NAME,  /**< Assign a name to the current location */
+    // CMD_GPS_ADD_KNOWN_LOCATION, /**< Add/update a known location mapping */
 
     CMD_BIN_NET_NOTIFY_MQTT_CONNECTED,  /**< Inform neighbor bins of MQTT connection */
     CMD_BIN_NET_NOTIFY_NETWORK_MESSAGE, /**< Notify neighbor bins of network message */
@@ -177,7 +178,6 @@ typedef enum {
     CMD_STOP_INTENT_TIMER,              /**< Cancel intent timer */
     CMD_START_ESCALATION_TIMER,         /**< Begin escalation delay */
     CMD_STOP_ESCALATION_TIMER,          /**< Cancel escalation timer */
-    CMD_SEND_ESCALATION_NOTIFICATION,   /**< Send escalation alert immediately */
     CMD_START_PERIODIC_TIMER,           /**< Begin periodic heartbeat cycle */
     CMD_STOP_PERIODIC_TIMER,            /**< Stop periodic heartbeat */
     CMD_START_ONESHOT_TIMER,            /**< Start a one‑shot timer (generic) */

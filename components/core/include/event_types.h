@@ -1,5 +1,5 @@
 /**
- * @file event_types.h
+ * @file components/core/include/event_types.h
  * @brief System Event Definitions – Facts Only
  *
  * =============================================================================
@@ -94,7 +94,7 @@ typedef enum {
     EVENT_GSM_READY,                 /**< GSM module ready after init */
     EVENT_GSM_COMMAND_RECEIVED,      /**< Authenticated SMS command received (payload: sender, command) */
 
-    EVENT_GPS_FIX_UPDATED,          /**< New GPS fix acquired */
+    EVENT_GPS_FIX_UPDATE,          /**< New GPS fix acquired */
     EVENT_GPS_FIX_LOST,             /**< GPS fix lost */
 
     /* --------------------------------------------------------
@@ -142,11 +142,6 @@ typedef enum {
      * -------------------------------------------------------- */
     EVENT_NEIGHBOR_STATUS_RECEIVED, /**< Status message from peer bin */
 
-    /* --------------------------------------------------------
-     * GPS / location
-     * -------------------------------------------------------- */
-    EVENT_GPS_COORDINATES_UPDATED,  /**< New GPS fix acquired */
-
     EVENT_REDIRECT_TO_BIN,           /**< System should redirect user to another bin (payload: redirect_info_t) */
 
 
@@ -189,10 +184,6 @@ typedef struct {
     char sender[16];
     char message[161];
 } gsm_sms_t;
-
-typedef struct {
-    gps_coordinates_t coordinates; /**< Latitude, longitude, altitude */
-} gps_update_t;
 
 typedef struct {
     uint8_t error_code;          /**< System-specific error code */
@@ -266,7 +257,6 @@ typedef struct {
 
         gsm_command_t gsm_command;
         gsm_sms_t gsm_sms;
-        gps_update_t gps_update;
 
         system_error_t system_error;
         /* Servo event payload */

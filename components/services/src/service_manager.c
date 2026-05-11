@@ -49,12 +49,6 @@ typedef struct {
  * ============================================================ */
 static const service_entry_t s_services[] = {
     {
-        .name = "gps",
-        .init = gps_service_init,
-        .register_handlers = gps_service_register_handlers,
-        .start = gps_service_start
-    },
-    {
         .name = "timer",
         .init = timer_service_init,
         .register_handlers = timer_service_register_handlers,
@@ -72,18 +66,42 @@ static const service_entry_t s_services[] = {
         .register_handlers = led_service_register_handlers,
         .start = led_service_start
     },
-        {
+    {
         .name = "buzzer",
         .init = buzzer_service_init,
         .register_handlers = buzzer_service_register_handlers,
         .start = buzzer_service_start
     },
-    // {
-    //     .name = "gsm",
-    //     .init = gsm_service_init,
-    //     .register_handlers = gsm_service_register_handlers,
-    //     .start = gsm_service_start
-    // },
+    {
+        .name = "pir",
+        .init = pir_service_init,
+        .register_handlers = pir_service_register_handlers,
+        .start = pir_service_start
+    },
+    {
+        .name = "ultrasonic",
+        .init = ultrasonic_service_init,
+        .register_handlers = ultrasonic_service_register_handlers,
+        .start = ultrasonic_service_start
+    },
+    {
+        .name = "servo",
+        .init = servo_service_init,
+        .register_handlers = servo_service_register_handlers,
+        .start = servo_service_start
+    },
+    {
+        .name = "gps",
+        .init = gps_service_init,
+        .register_handlers = gps_service_register_handlers,
+        .start = gps_service_start
+    },
+    {
+        .name = "gsm",
+        .init = gsm_service_init,
+        .register_handlers = gsm_service_register_handlers,
+        .start = gsm_service_start
+    },
     {
         .name = "wifi",
         .init = wifi_service_init,
@@ -107,24 +125,6 @@ static const service_entry_t s_services[] = {
         .init = web_command_service_init,
         .register_handlers = web_command_service_register_handlers,
         .start = web_command_service_start
-    },
-    {
-        .name = "pir",
-        .init = pir_service_init,
-        .register_handlers = pir_service_register_handlers,
-        .start = pir_service_start
-    },
-    {
-        .name = "ultrasonic",
-        .init = ultrasonic_service_init,
-        .register_handlers = ultrasonic_service_register_handlers,
-        .start = ultrasonic_service_start
-    },
-    {
-        .name = "servo",
-        .init = servo_service_init,
-        .register_handlers = servo_service_register_handlers,
-        .start = servo_service_start
     },
     // {
     //     .name = "example",

@@ -65,8 +65,9 @@ typedef struct {
     /* --------------------------------------------------------
      * Fill level and bin lock state
      * -------------------------------------------------------- */
-    uint8_t bin_fill_level_percent;   /**< 0-100%, last measurement */
-    bool bin_locked;                  /**< true = lid disabled */
+    uint8_t bin_fill_level_percent;     /**< 0-100%, last measurement */
+    bool bin_locked;                    /**< true = lid disabled */
+    bool gps_valid;                     /**< true if last GPS fix was valid */
 
     /* --------------------------------------------------------
      * Configurable thresholds (runtime adjustable)
@@ -115,6 +116,16 @@ esp_err_t state_manager_process_event(const system_event_t *event);
  * @return Const pointer to system_context_t.
  */
 const system_context_t* state_manager_get_context(void);
+
+/**
+ * @brief Copy the current system context into a caller‑supplied buffer.
+ *
+ * Thread‑safe; uses an internal mutex.
+ *
+ * @param[out] dest  Pointer to a system_context_t structure to fill.
+ *                   Must not be NULL.
+ */
+void state_manager_copy_context(system_context_t *dest);
 
 #ifdef __cplusplus
 }

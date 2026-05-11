@@ -21,7 +21,6 @@
 
 #include "bin_network_service.h"
 #include "mqtt_topic.h"
-#include "gps_service.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -32,6 +31,7 @@
 #include "service_interfaces.h"
 #include "event_types.h"
 #include "command_params.h"
+#include "state_manager.h"   // for state_manager_copy_context
 #include "cJSON.h"
 #include <string.h>
 #include <math.h>
@@ -409,22 +409,29 @@ static void publish_heartbeat(void)
     uint32_t now = get_current_timestamp();
 
     /* Get GPS fix from GPS service */
-    gps_data_t gps;
-    bool fix = gps_service_get_last_fix(&gps);
-    float lat = fix ? (float)gps.latitude : 0.0f;
-    float lon = fix ? (float)gps.longitude : 0.0f;
+    system_context_t ctx;
+    state_manager_copy_context(&ctx);
+    char lat_str[32], lon_str[32];
+    if (ctx.gps_valid) {
+        snprintf(lat_str, sizeof(lat_str), "%.6f", ctx.gps_coordinates.latitude);
+        snprintf(lon_str, sizeof(lon_str), "%.6f", ctx.gps_coordinates.longitude);
+    } else {
+        snprintf(lat_str, sizeof(lat_str), "null");
+        snprintf(lon_str, sizeof(lon_str), "null");
+    }
+    // Then using %s (not %f) in snprintf to build the JSON.
 
     snprintf(json, sizeof(json),
              "{"
              "\"id\":\"%s\","
-             "\"lat\":%.6f,"
-             "\"lon\":%.6f,"
+             "\"lat\":%s,"
+             "\"lon\":%s,"
              "\"fill\":%u,"
              "\"capacity\":%u,"
              "\"status\":\"%s\","
              "\"timestamp\":%lu"
              "}",
-             s_ctx.own_id, lat, lon,
+             s_ctx.own_id, lat_str, lon_str,
              s_ctx.own_fill_percent, s_ctx.own_capacity,
              s_ctx.own_fill_percent >= 100 ? "FULL" : "AVAILABLE",
              (unsigned long)now);
@@ -447,21 +454,27 @@ static void publish_state(void)
     uint32_t now = get_current_timestamp();
 
     /* Get GPS fix from GPS service */
-    gps_data_t gps;
-    bool fix = gps_service_get_last_fix(&gps);
-    float lat = fix ? (float)gps.latitude : 0.0f;
-    float lon = fix ? (float)gps.longitude : 0.0f;
+    system_context_t ctx;
+    state_manager_copy_context(&ctx);
+    char lat_str[32], lon_str[32];
+    if (ctx.gps_valid) {
+        snprintf(lat_str, sizeof(lat_str), "%.6f", ctx.gps_coordinates.latitude);
+        snprintf(lon_str, sizeof(lon_str), "%.6f", ctx.gps_coordinates.longitude);
+    } else {
+        snprintf(lat_str, sizeof(lat_str), "null");
+        snprintf(lon_str, sizeof(lon_str), "null");
+    }
 
     snprintf(json, sizeof(json),
              "{"
              "\"fill\":%u,"
              "\"capacity\":%u,"
-             "\"lat\":%.6f,"
-             "\"lon\":%.6f,"
+             "\"lat\":%s,"
+             "\"lon\":%s,"
              "\"timestamp\":%lu"
              "}",
              s_ctx.own_fill_percent, s_ctx.own_capacity,
-             lat, lon,
+             lat_str, lon_str,
              (unsigned long)now);
 
     char topic[64];
@@ -484,19 +497,25 @@ static void publish_cloud_heartbeat(void)
     uint32_t now = get_current_timestamp();
 
     /* Get GPS fix from GPS service */
-    gps_data_t gps;
-    bool fix = gps_service_get_last_fix(&gps);
-    float lat = fix ? (float)gps.latitude : 0.0f;
-    float lon = fix ? (float)gps.longitude : 0.0f;
+    system_context_t ctx;
+    state_manager_copy_context(&ctx);
+    char lat_str[32], lon_str[32];
+    if (ctx.gps_valid) {
+        snprintf(lat_str, sizeof(lat_str), "%.6f", ctx.gps_coordinates.latitude);
+        snprintf(lon_str, sizeof(lon_str), "%.6f", ctx.gps_coordinates.longitude);
+    } else {
+        snprintf(lat_str, sizeof(lat_str), "null");
+        snprintf(lon_str, sizeof(lon_str), "null");
+    }
 
     snprintf(json, sizeof(json),
              "{"
              "\"fill\":%u,"
-             "\"lat\":%.6f,"
-             "\"lon\":%.6f,"
+             "\"lat\":%s,"
+             "\"lon\":%s,"
              "\"timestamp\":%lu"
              "}",
-             s_ctx.own_fill_percent, lat, lon,
+             s_ctx.own_fill_percent, lat_str, lon_str,
              (unsigned long)now);
 
     char topic[64];

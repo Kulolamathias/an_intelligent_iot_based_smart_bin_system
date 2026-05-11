@@ -4,8 +4,7 @@
 #include "command_params.h"
 #include "event_types.h"
 #include "mqtt_topic.h"
-#include "gps_types.h"
-#include "gps_service.h"
+#include "state_manager.h"   // for state_manager_copy_context
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -78,10 +77,9 @@ static esp_err_t handle_read_fill_level(void *context, void *params)
     if (ret == ESP_OK) {
         uint32_t distance_cm = (pulse_us * 1715) / 100000;
         data.fill_percent = distance_to_fill_percent(distance_cm);
-        ESP_LOGI(TAG, "Fill: distance=%lu cm, fill=%u%%", distance_cm, data.fill_percent);
     } else {
         ESP_LOGW(TAG, "Fill sensor failed: %d", ret);
-        return ret;  // early exit on sensor failure
+        return ret;
     }
 
     /* Post fill level event to core */
@@ -94,22 +92,21 @@ static esp_err_t handle_read_fill_level(void *context, void *params)
     ev.data.fill_level.fill_percent = data.fill_percent;
     service_post_event(&ev);
 
-    /* --- MQTT publish with GPS data --- */
-    /* Get latest GPS fix (if any) */
-    gps_data_t gps;
-    bool fix = gps_service_get_last_fix(&gps);
+    /* --- MQTT publish with GPS data from core context --- */
+    system_context_t ctx;
+    state_manager_copy_context(&ctx);
 
-    /* Build device-specific topic: devices/<mac>/data */
     char topic[128];
     mqtt_topic_build(topic, sizeof(topic), "data");
 
-    /* JSON payload: fill + optional coordinates */
     char json[128];
-    if (fix) {
+    if (ctx.gps_valid) {
         snprintf(json, sizeof(json),
                  "{\"fill\":%u,\"lat\":%.6f,\"lon\":%.6f,\"alt\":%.1f}",
                  data.fill_percent,
-                 gps.latitude, gps.longitude, gps.altitude_m);
+                 ctx.gps_coordinates.latitude,
+                 ctx.gps_coordinates.longitude,
+                 (double)ctx.gps_coordinates.altitude);
     } else {
         snprintf(json, sizeof(json),
                  "{\"fill\":%u,\"lat\":null,\"lon\":null,\"alt\":null}",
@@ -128,8 +125,6 @@ static esp_err_t handle_read_fill_level(void *context, void *params)
     strlcpy((char*)pub.payload, json, sizeof(pub.payload));
     pub.payload_len = strlen(json);
     command_router_execute(CMD_PUBLISH_MQTT, &pub);
-
-    ESP_LOGI(TAG, "Published to %s: %s", topic, json);
 
     return ESP_OK;
 }
