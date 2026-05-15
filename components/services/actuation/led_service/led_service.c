@@ -9,18 +9,24 @@
 #include "command_params.h"
 #include "esp_log.h"
 
+#define GREEN_LED_GPIO GPIO_NUM_27
+#define WHITE_LED_GPIO GPIO_NUM_26
+#define BLUE_LED_GPIO GPIO_NUM_5
+#define RED_LED_GPIO GPIO_NUM_4
+// #define YELLOW_LED_GPIO GPIO_NUM_  /**< this pin isn't safe: ... */
+
 static const char *TAG = "LED_SVC";
 
-#define LED_COUNT 5
+#define LED_COUNT 4
 
 static led_handle_t s_leds[LED_COUNT] = {NULL};
 
 static const led_config_t s_led_configs[LED_COUNT] = {
-    { .gpio_num = GPIO_NUM_25, .channel = LEDC_CHANNEL_0, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // white
-    { .gpio_num = GPIO_NUM_5,  .channel = LEDC_CHANNEL_1, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // green
-    { .gpio_num = GPIO_NUM_33, .channel = LEDC_CHANNEL_2, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // yellow
-    { .gpio_num = GPIO_NUM_26, .channel = LEDC_CHANNEL_3, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // red
-    { .gpio_num = GPIO_NUM_32, .channel = LEDC_CHANNEL_4, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // blue
+    { .gpio_num = WHITE_LED_GPIO, .channel = LEDC_CHANNEL_0, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // white
+    { .gpio_num = GREEN_LED_GPIO,  .channel = LEDC_CHANNEL_1, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // green
+    // { .gpio_num = YELLOW_LED_GPIO, .channel = LEDC_CHANNEL_2, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // yellow
+    { .gpio_num = RED_LED_GPIO, .channel = LEDC_CHANNEL_4, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // red
+    { .gpio_num = BLUE_LED_GPIO, .channel = LEDC_CHANNEL_5, .timer = LEDC_TIMER_0, .freq_hz = 1000, .active_high = true },  // blue
 };
 
 static led_handle_t get_led(uint8_t led_id)

@@ -36,9 +36,9 @@
 /* Configuration (hard‑coded until Kconfig is introduced)                    */
 /* -------------------------------------------------------------------------- */
 
-#define GPS_UART_PORT          UART_NUM_2
-#define GPS_TXD_PIN            GPIO_NUM_19
-#define GPS_RXD_PIN            GPIO_NUM_18
+#define GPS_UART_PORT          UART_NUM_1
+#define GPS_TXD_PIN            GPIO_NUM_13
+#define GPS_RXD_PIN            GPIO_NUM_14
 #define GPS_BAUDRATE           9600
 #define GPS_UART_RX_BUF_SIZE   512
 

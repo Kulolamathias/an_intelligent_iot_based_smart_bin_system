@@ -29,7 +29,7 @@
 static const char *TAG = "SERVO_SVC";
 
 /* Servo configuration – adjust according to your hardware */
-#define SERVO_GPIO           GPIO_NUM_14
+#define SERVO_GPIO           GPIO_NUM_33
 #define SERVO_CHANNEL        LEDC_CHANNEL_0
 #define SERVO_TIMER          LEDC_TIMER_0
 #define SERVO_MIN_PULSE_US   500    /* 0° pulse width */

@@ -22,7 +22,7 @@
 static const char *TAG = "PIR_SVC";
 
 /* Configuration */
-#define PIR_GPIO_PIN        GPIO_NUM_27   /* Adjust to your wiring */
+#define PIR_GPIO_PIN        GPIO_NUM_36
 #define PIR_POLL_INTERVAL_MS 100          /* 10 Hz polling rate */
 
 static pir_handle_t s_pir = NULL;

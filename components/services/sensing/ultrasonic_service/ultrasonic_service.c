@@ -15,10 +15,10 @@
 static const char *TAG = "ULTRASONIC_SVC";
 
 /* Sensor pins */
-#define FILL_SENSOR_TRIG 12
-#define FILL_SENSOR_ECHO 13
-#define INTENT_SENSOR_TRIG 2
-#define INTENT_SENSOR_ECHO 4
+#define FILL_SENSOR_TRIG 25
+#define FILL_SENSOR_ECHO 34
+#define INTENT_SENSOR_TRIG 32
+#define INTENT_SENSOR_ECHO 35
 
 /* Bin configuration */
 #define BIN_HEIGHT_CM 60
