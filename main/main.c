@@ -135,32 +135,8 @@ void app_main(void)
 
     ESP_LOGI(TAG, "All tests completed. System idling.");
 
-        /* Wait for GSM to initialise */
-    vTaskDelay(pdMS_TO_TICKS(8000));
-    
-    /* Send a test SMS to verify GSM works */
-    cmd_send_sms_params_t test_sms = {
-        .phone_number = "+255688173415",   /* replace with your number */
-        .message = "Smart bin GSM test OK"
-    };
-    ret = command_router_execute(CMD_SEND_SMS, &test_sms);
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Test SMS command sent");
-    } else {
-        ESP_LOGE(TAG, "Test SMS command failed: %d", ret);
-    }
 
-
-    /* Simulate near‑full bin after 15 seconds */
-    vTaskDelay(pdMS_TO_TICKS(15000));
-    system_event_t ev = {
-        .id = EVENT_FILL_LEVEL_UPDATED,
-        .data.fill_level.fill_percent = 75
-    };
-    event_dispatcher_post_event(&ev);
-    ESP_LOGI(TAG, "Simulated fill level 75%% (should trigger NEAR_FULL and SMS)");
-
-
+    vTaskDelete(NULL); /* Delete main task .. we don't need it anymore */
 
     /* 7. Idle loop – keep the system alive */
     while (1) {

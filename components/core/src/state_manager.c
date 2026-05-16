@@ -169,9 +169,10 @@ static void prepare_empty_notification(const system_context_t *ctx, const system
 }
 static void prepare_auth_success_response(const system_context_t *ctx, const system_event_t *event, void *params_out)
 {
-    (void)ctx; (void)event;
-    cmd_send_sms_params_t *p = params_out;
-    snprintf(p->phone_number, sizeof(p->phone_number), "%s", event->data.gsm_command.sender);
+    (void)ctx;
+    cmd_send_sms_params_t *p = (cmd_send_sms_params_t *)params_out;
+    const char *sender = event->data.gsm_command.sender;
+    strlcpy(p->phone_number, sender, sizeof(p->phone_number));
     snprintf(p->message, sizeof(p->message), "Authentication successful. Bin unlocked for maintenance.");
 }
 static void prepare_show_full_message(const system_context_t *ctx, const system_event_t *event, void *params_out)
@@ -508,6 +509,14 @@ static void prepare_welcome_timer(const system_context_t *ctx,
     p->event_id = EVENT_WELCOME_TIMEOUT;
 }
 
+static void prepare_boot_notification(const system_context_t *ctx, const system_event_t *event, void *params_out)
+{
+    (void)ctx; (void)event;
+    cmd_send_notification_params_t *p = (cmd_send_notification_params_t *)params_out;
+    snprintf(p->message, sizeof(p->message), "Smart bin online. Ready for use.");
+    p->is_escalation = false;
+}
+
 
 /* ============================================================
  * TRANSITION CONDITION FUNCTIONS
@@ -564,6 +573,7 @@ static const state_transition_rule_t g_transition_table[] =
         .command_batch = COMMAND_BATCH(
             { CMD_START_PIR_MONITORING, NULL },                 /* start PIR polling */
             { CMD_SEND_HEARTBEAT, NULL },
+            { CMD_SEND_NOTIFICATION, prepare_boot_notification },
             { CMD_MQTT_SET_WIFI_STATE, prepare_set_wifi_state },
             { CMD_BUZZER_PATTERN, prepare_buzzer_pattern_power_up },
             { CMD_SHOW_MESSAGE, prepare_welcome_message }
@@ -740,13 +750,6 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_SHOW_MESSAGE, prepare_welcome_message }
         )
     },
-    {
-        .current_state = SYSTEM_STATE_IDLE,
-        .event_id      = EVENT_FILL_LEVEL_UPDATED, /**< (fill level updated but below near‑full) */
-        .condition     = NULL,   // always match
-        .next_state    = SYSTEM_STATE_IDLE,
-        .command_batch = COMMAND_BATCH_EMPTY   // or COMMAND_BATCH() with no commands
-    },
 
     /* --------------------------------------------------------
      * IDLE → NEAR_FULL (fill level reaches near-full threshold)
@@ -801,6 +804,28 @@ static const state_transition_rule_t g_transition_table[] =
             { CMD_LED_OFF,          prepare_led_off_blue },
             { CMD_BUZZER_STOP,      prepare_buzzer_off  },
             { CMD_SHOW_MESSAGE,     prepare_welcome_message }
+        )
+    },
+
+    /* --------------------------------------------------------
+    * NEAR_FULL → MAINTENANCE (GSM authentication granted, even before WiFi)
+    * -------------------------------------------------------- */
+    {
+        .current_state = SYSTEM_STATE_NEAR_FULL,
+        .event_id      = EVENT_AUTH_GRANTED,
+        .condition     = NULL,
+        .next_state    = SYSTEM_STATE_MAINTENANCE,
+        .command_batch = COMMAND_BATCH(
+            { CMD_UNLOCK_BIN, NULL },
+            { CMD_ENTER_MAINTENANCE_MODE, NULL },
+            { CMD_SEND_SMS_RESPONSE, prepare_auth_success_response },
+            { CMD_LED_BLINK_STOP, prepare_led_off_white },
+            { CMD_LED_OFF, prepare_led_off_green },
+            { CMD_LED_OFF, prepare_led_off_yellow },
+            { CMD_LED_OFF, prepare_led_off_red },
+            { CMD_LED_SET_BRIGHTNESS, prepare_led_on_blue },
+            { CMD_BUZZER_PATTERN, prepare_buzzer_calming_chord },
+            { CMD_SHOW_MESSAGE, prepare_maintenance_message }
         )
     },
 

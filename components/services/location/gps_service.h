@@ -81,7 +81,9 @@ extern "C" {
 /* --------------------------- Public API (called by service_manager) -------- */
 
 esp_err_t gps_service_init(void);
+
 esp_err_t gps_service_register_handlers(void);
+
 esp_err_t gps_service_start(void);
 
 

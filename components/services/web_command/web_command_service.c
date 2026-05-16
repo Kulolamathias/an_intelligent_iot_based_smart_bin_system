@@ -1,3 +1,19 @@
+/**
+ * @file components/services/web_command/web_command_service.c
+ * @brief Web Command Service – implementation.
+ * 
+ * =============================================================================
+ * This service subscribes to MQTT topics for web commands and processes them.
+ * It parses incoming JSON commands and executes corresponding system commands via
+ * the command router. It also handles device registration and configuration updates.
+ * =============================================================================
+ * 
+ * @version 1.0.0
+ * @author matthithyahu
+ * @date 2026-04-01
+ */
+
+
 #include "web_command_service.h"
 #include "service_interfaces.h"
 #include "command_params.h"

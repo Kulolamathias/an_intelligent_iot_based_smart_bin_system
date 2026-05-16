@@ -49,6 +49,18 @@ typedef struct {
  * ============================================================ */
 static const service_entry_t s_services[] = {
     {
+        .name = "gps",
+        .init = gps_service_init,
+        .register_handlers = gps_service_register_handlers,
+        .start = gps_service_start
+    },
+    {
+        .name = "gsm",
+        .init = gsm_service_init,
+        .register_handlers = gsm_service_register_handlers,
+        .start = gsm_service_start
+    },
+    {
         .name = "timer",
         .init = timer_service_init,
         .register_handlers = timer_service_register_handlers,
@@ -89,18 +101,6 @@ static const service_entry_t s_services[] = {
         .init = servo_service_init,
         .register_handlers = servo_service_register_handlers,
         .start = servo_service_start
-    },
-    {
-        .name = "gps",
-        .init = gps_service_init,
-        .register_handlers = gps_service_register_handlers,
-        .start = gps_service_start
-    },
-    {
-        .name = "gsm",
-        .init = gsm_service_init,
-        .register_handlers = gsm_service_register_handlers,
-        .start = gsm_service_start
     },
     {
         .name = "wifi",

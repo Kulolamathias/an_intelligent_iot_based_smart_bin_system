@@ -1,3 +1,23 @@
+/**
+ * @file components/services/sensing/ultrasonic_service/ultrasonic_service.c
+ * @brief Ultrasonic Service – implementation.
+ * 
+ * =============================================================================
+ * IMPLEMENTATION NOTES
+ * =============================================================================
+ * - Manages two ultrasonic sensors: fill-level and intention.
+ * - Uses the ultrasonic driver for hardware interaction.
+ * - Provides a command handler for on-demand fill level reading.
+ * - Uses an ESP timer for periodic fill level measurement and MQTT publishing.
+ * - The intention sensor is monitored in a FreeRTOS task that posts events on state changes.
+ * * - The service is designed to be policy‑agnostic; it simply provides sensor data and events.
+ * * =============================================================================
+ * 
+ * 
+ * @author matthithyahu
+ * @date 2026-04-02
+ */
+
 #include "ultrasonic_service.h"
 #include "ultrasonic_driver.h"
 #include "service_interfaces.h"
